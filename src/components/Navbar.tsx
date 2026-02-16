@@ -25,7 +25,7 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-2 font-bold text-xl">
             <Film className="h-7 w-7 text-primary" />
             <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              CineBook
+              MovieBook
             </span>
           </Link>
 

@@ -9,17 +9,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 const TicketsManager = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     fetchTickets();
   }, []);
 
   const fetchTickets = async () => {
+    setIsLoading(true);
     try {
       const response = await ticketsAPI.getAll();
-      setTickets(response.data);
+      // Normalize response - ensure it's an array
+      setTickets(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
+      console.error('Failed to fetch tickets:', error);
       toast.error('Failed to fetch tickets');
+      setTickets([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -29,23 +36,31 @@ const TicketsManager = () => {
         <h2 className="text-2xl font-semibold">Tickets Management</h2>
         <Button onClick={fetchTickets}><RefreshCw className="h-4 w-4 mr-2" />Refresh</Button>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow><TableHead>Ticket No</TableHead><TableHead>Show</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead><TableHead>Seat</TableHead><TableHead>Price</TableHead></TableRow>
-        </TableHeader>
-        <TableBody>
-          {tickets.map((t) => (
-            <TableRow key={t.ticket_no}>
-              <TableCell>{t.ticket_no}</TableCell>
-              <TableCell>{t.show_id}</TableCell>
-              <TableCell>{t.show_date}</TableCell>
-              <TableCell>{t.show_time}</TableCell>
-              <TableCell>{t.seat_no}</TableCell>
-              <TableCell>₹{t.price}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : tickets.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">No tickets found</div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow><TableHead>Ticket No</TableHead><TableHead>Show</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead><TableHead>Seat</TableHead><TableHead>Price</TableHead></TableRow>
+          </TableHeader>
+          <TableBody>
+            {tickets.map((t) => (
+              <TableRow key={t.ticket_no}>
+                <TableCell>{t.ticket_no}</TableCell>
+                <TableCell>{t.show_id ?? '—'}</TableCell>
+                <TableCell>{t.show_date ?? '—'}</TableCell>
+                <TableCell>{t.show_time ?? '—'}</TableCell>
+                <TableCell>{t.seat_no ?? '—'}</TableCell>
+                <TableCell>₹{t.price ?? 0}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </Card>
   );
 };

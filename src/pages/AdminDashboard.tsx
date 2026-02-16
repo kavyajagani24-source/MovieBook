@@ -7,7 +7,6 @@ import { Film, MapPin, Calendar, Ticket, Users, Tag, BarChart3 } from 'lucide-re
 import MoviesManager from '@/components/admin/MoviesManager';
 import TheatresManager from '@/components/admin/TheatresManager';
 import ShowsManager from '@/components/admin/ShowsManager';
-import SeatsManager from '@/components/admin/SeatsManager';
 import TicketsManager from '@/components/admin/TicketsManager';
 import BookingsManager from '@/components/admin/BookingsManager';
 import DiscountsManager from '@/components/admin/DiscountsManager';
@@ -28,7 +27,7 @@ const AdminDashboard = () => {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-4 lg:grid-cols-8 gap-2">
+            <TabsList className="grid grid-cols-4 lg:grid-cols-7 gap-2">
               <TabsTrigger value="stats" className="gap-2">
                 <BarChart3 className="h-4 w-4" />
                 <span className="hidden sm:inline">Stats</span>
@@ -45,10 +44,6 @@ const AdminDashboard = () => {
                 <Calendar className="h-4 w-4" />
                 <span className="hidden sm:inline">Shows</span>
               </TabsTrigger>
-              <TabsTrigger value="seats" className="gap-2">
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Seats</span>
-              </TabsTrigger>
               <TabsTrigger value="tickets" className="gap-2">
                 <Ticket className="h-4 w-4" />
                 <span className="hidden sm:inline">Tickets</span>
@@ -56,10 +51,6 @@ const AdminDashboard = () => {
               <TabsTrigger value="bookings" className="gap-2">
                 <Ticket className="h-4 w-4" />
                 <span className="hidden sm:inline">Bookings</span>
-              </TabsTrigger>
-              <TabsTrigger value="discounts" className="gap-2">
-                <Tag className="h-4 w-4" />
-                <span className="hidden sm:inline">Discounts</span>
               </TabsTrigger>
             </TabsList>
 
@@ -77,10 +68,6 @@ const AdminDashboard = () => {
 
             <TabsContent value="shows">
               <ShowsManager />
-            </TabsContent>
-
-            <TabsContent value="seats">
-              <SeatsManager />
             </TabsContent>
 
             <TabsContent value="tickets">

@@ -32,21 +32,43 @@ const SeatSelection = () => {
   }, []);
 
   const initializeSeats = () => {
-    // Generate mock seats (8 rows, 12 seats each)
-    const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-    const seatsPerRow = 12;
+    // Build a fixed seating layout that matches the requested map.
+    // Rows: C, D, F, H, I, J, K, L, M
+    // Use `null` in the seat arrays to indicate a gap (no seat), so spacing matches the photo.
+    const layoutRows: { row: string; numbers: (number | null)[]; price: number }[] = [
+      { row: 'C', numbers: Array.from({ length: 17 }, (_, i) => i + 1), price: 250 },
+      { row: 'D', numbers: Array.from({ length: 17 }, (_, i) => i + 1), price: 250 },
+      // F is centered smaller row to mimic photo
+      { row: 'F', numbers: [null, 3,4,5,6,7,8,9,10,11,12,13, null], price: 250 },
+      // Premium divider will be rendered between F and H
+      { row: 'H', numbers: [null,1,2,3,4,5,6,7, null], price: 200 },
+      { row: 'I', numbers: [null,1,2,3,4,5,6,7, null], price: 200 },
+      { row: 'J', numbers: [null,1,2,3,4,5,6,7, null], price: 200 },
+      { row: 'K', numbers: [null,1,2,3,4,5,6,7, null], price: 150 },
+      { row: 'L', numbers: [null,1,2,3,4,5,6,7, null], price: 150 },
+      { row: 'M', numbers: [null,1,2,3,4,5,6,7, null], price: 150 },
+    ];
+
     const generatedSeats: Seat[] = [];
 
-    rows.forEach((row, rowIndex) => {
-      for (let i = 1; i <= seatsPerRow; i++) {
+    // deterministic occupied pattern: pick a few positions to show as booked (grey)
+    const occupiedSet = new Set<string>([
+      'C5','C6','D10','F6','J2','J3','L4'
+    ]);
+
+    layoutRows.forEach((r) => {
+      r.numbers.forEach((num) => {
+        if (num === null) return; // gap
+
+        const key = `${r.row}${num}`;
         generatedSeats.push({
-          row,
-          number: i,
-          isOccupied: Math.random() > 0.7, // Random occupied seats
+          row: r.row,
+          number: num,
+          isOccupied: occupiedSet.has(key),
           isSelected: false,
-          price: rowIndex < 3 ? 250 : rowIndex < 6 ? 200 : 150, // Premium, Standard, Economy
+          price: r.price,
         });
-      }
+      });
     });
 
     setSeats(generatedSeats);
@@ -84,6 +106,19 @@ const SeatSelection = () => {
 
   const totalAmount = selectedSeats.reduce((sum, seat) => sum + seat.price, 0);
 
+  // Seating layout used for rendering (matches the initializeSeats layout)
+  const seatingLayout: { row: string; numbers: (number | null)[] }[] = [
+    { row: 'C', numbers: Array.from({ length: 17 }, (_, i) => i + 1) },
+    { row: 'D', numbers: Array.from({ length: 17 }, (_, i) => i + 1) },
+    { row: 'F', numbers: [null, 3,4,5,6,7,8,9,10,11,12,13, null] },
+    { row: 'H', numbers: [null,1,2,3,4,5,6,7, null] },
+    { row: 'I', numbers: [null,1,2,3,4,5,6,7, null] },
+    { row: 'J', numbers: [null,1,2,3,4,5,6,7, null] },
+    { row: 'K', numbers: [null,1,2,3,4,5,6,7, null] },
+    { row: 'L', numbers: [null,1,2,3,4,5,6,7, null] },
+    { row: 'M', numbers: [null,1,2,3,4,5,6,7, null] },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -96,53 +131,81 @@ const SeatSelection = () => {
 
         {/* Screen */}
         <div className="mb-12">
-          <div className="h-2 bg-gradient-to-r from-transparent via-primary to-transparent mb-2 rounded" />
+          {/* Use a muted gradient for the screen bar instead of the primary (red) color */}
+          <div className="h-2 bg-gradient-to-r from-transparent via-muted to-transparent mb-2 rounded" />
           <p className="text-center text-sm text-muted-foreground">SCREEN</p>
         </div>
 
         {/* Seat Grid */}
         <div className="mb-8 overflow-x-auto">
           <div className="inline-block min-w-full">
-            {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((row) => (
-              <div key={row} className="flex items-center gap-2 mb-2 justify-center">
-                <span className="w-8 text-center font-semibold text-muted-foreground">{row}</span>
-                <div className="flex gap-2">
-                  {seats
-                    .filter(seat => seat.row === row)
-                    .map((seat) => (
-                      <button
-                        key={`${seat.row}${seat.number}`}
-                        onClick={() => handleSeatClick(seat)}
-                        disabled={seat.isOccupied}
-                        className={cn(
-                          'w-8 h-8 rounded-t-lg transition-all duration-200 text-xs font-medium',
-                          seat.isOccupied && 'bg-seat-occupied cursor-not-allowed',
-                          !seat.isOccupied && !seat.isSelected && 'bg-seat-available hover:bg-seat-available/80',
-                          seat.isSelected && 'bg-seat-selected hover:bg-seat-selected/90'
-                        )}
-                        title={`${seat.row}${seat.number} - ₹${seat.price}`}
-                      >
-                        {seat.number}
-                      </button>
-                    ))}
+            {seatingLayout.map(({ row, numbers }) => (
+              <>
+                <div key={row} className="flex items-center gap-2 mb-2 justify-center">
+                  <span className="w-8 text-center font-semibold text-muted-foreground">{row}</span>
+                  <div className="flex gap-2 items-center">
+                    {numbers.map((num, idx) => {
+                      if (num === null) {
+                        // spacer to preserve layout
+                        return <div key={`gap-${row}-${idx}`} style={{ width: '2.25rem', height: '2.25rem' }} />;
+                      }
+
+                      const seat = seats.find(s => s.row === row && s.number === num);
+                      if (!seat) {
+                        return <div key={`empty-${row}-${num}`} style={{ width: '2.25rem', height: '2.25rem' }} />;
+                      }
+
+                      return (
+                        <button
+                          key={`${seat.row}${seat.number}`}
+                          onClick={() => handleSeatClick(seat)}
+                          disabled={seat.isOccupied}
+                          className={cn('seat', seat.isOccupied ? 'occupied' : seat.isSelected ? 'selected' : 'available')}
+                          title={`${seat.row}${seat.number} - ₹${seat.price}`}
+                          aria-pressed={seat.isSelected}
+                          aria-label={`Seat ${seat.row}${seat.number} ${seat.isOccupied ? 'occupied' : seat.isSelected ? 'selected' : 'available'}`}
+                        >
+                          {seat.number}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+
+                {/* Render premium label as a sibling (after the F row) so it doesn't disturb row alignment */}
+                {row === 'F' && (
+                  <div key="premium-label" className="w-full flex justify-end pr-12 mb-4">
+                    <p className="inline-block text-sm font-semibold text-muted-foreground">₹250 PREMIUM</p>
+                  </div>
+                )}
+              </>
             ))}
+
+            {/* Blue callout button pointing to screen (centered) */}
+            <div className="w-full flex justify-center mt-4">
+              <div className="inline-flex items-center gap-3 bg-blue-500 text-white px-6 py-2 rounded-full shadow-md">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="-rotate-90">
+                  <path d="M12 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="font-medium">All eyes this way please</span>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Legend */}
         <div className="flex flex-wrap justify-center gap-6 mb-8">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-t-lg bg-seat-available" />
+            <div className="seat legend available" />
             <span className="text-sm text-muted-foreground">Available</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-t-lg bg-seat-selected" />
+            <div className="seat legend selected" />
             <span className="text-sm text-muted-foreground">Selected</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-t-lg bg-seat-occupied" />
+            <div className="seat legend occupied" />
             <span className="text-sm text-muted-foreground">Occupied</span>
           </div>
         </div>

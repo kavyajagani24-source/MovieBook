@@ -8,14 +8,15 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
+    /* Light theme (default) */
+    --background: 0 0% 100%; /* white */
+    --foreground: 0 0% 6%; /* near-black text */
 
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 6%;
 
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6%;
 
     --primary: 0 84% 60%;
     --primary-foreground: 0 0% 100%;
@@ -23,17 +24,17 @@ All colors MUST be HSL.
     --secondary: 45 93% 58%;
     --secondary-foreground: 0 0% 10%;
 
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 210 16% 92%;
+    --muted-foreground: 210 8% 40%;
 
     --accent: 0 72% 51%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 18%;
-    --input: 0 0% 18%;
+    --border: 210 16% 88%;
+    --input: 210 16% 92%;
     --ring: 0 84% 60%;
 
     --radius: 0.75rem;
@@ -45,14 +46,14 @@ All colors MUST be HSL.
     --seat-selected: 0 84% 60%;
     --seat-occupied: 0 0% 30%;
     
-    /* Gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(0 0% 4%) 0%, hsl(0 0% 8%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 8%) 0%, hsl(0 0% 6%) 100%);
+    /* Gradients (lighter versions) */
+    --gradient-hero: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(0 0% 98%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(0 0% 98%) 100%);
     --gradient-primary: linear-gradient(135deg, hsl(0 84% 60%) 0%, hsl(0 72% 51%) 100%);
     
-    /* Shadows */
-    --shadow-glow: 0 0 30px hsla(0 84% 60% / 0.3);
-    --shadow-card: 0 10px 30px hsla(0 0% 0% / 0.5);
+    /* Shadows (subtler for light backgrounds) */
+    --shadow-glow: 0 0 20px hsla(0 84% 60% / 0.12);
+    --shadow-card: 0 6px 18px hsla(210 8% 8% / 0.06);
   }
 }
 
@@ -63,5 +64,62 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Seat-specific component styles to match the screenshot: 
+   - available: green outlined square, green text; hover fills with green
+   - selected: solid red square with white text
+   - occupied: muted dark square
+*/
+@layer components {
+  .seat {
+    /* base sizing matches buttons used previously (approx 2.25rem) */
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem; /* slightly rounded square */
+    font-weight: 600;
+    font-size: 0.75rem;
+    line-height: 1;
+    transition: all 160ms ease;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .seat.available {
+    background: transparent;
+    color: hsl(var(--seat-available));
+    border: 2px solid hsl(var(--seat-available));
+  }
+
+  .seat.available:hover {
+    background: hsl(var(--seat-available));
+    color: hsl(0 0% 100%);
+    transform: translateY(-2px);
+  }
+
+  .seat.selected {
+    background: hsl(var(--seat-selected));
+    color: hsl(0 0% 100%);
+    border: 2px solid hsl(var(--seat-selected));
+    box-shadow: 0 6px 14px hsla(var(--seat-selected) / 0.18);
+  }
+
+  .seat.occupied {
+    background: hsl(var(--seat-occupied));
+    color: hsl(0 0% 100%);
+    border: 2px solid hsl(var(--seat-occupied));
+    cursor: not-allowed;
+    opacity: 0.9;
+  }
+
+  /* smaller legend squares */
+  .seat.legend {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.35rem;
   }
 }

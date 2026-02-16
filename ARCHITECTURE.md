@@ -177,7 +177,7 @@ app.get('/api/movies', async (req, res) => {
 
 **Create Booking**
 ```javascript
-app.post('/api/book', authenticateToken, async (req, res) => {
+app.post('/api/bookings', authenticateToken, async (req, res) => {
   const { ticket_no, c_id } = req.body;
   const booking_date = new Date().toISOString().split('T')[0];
   

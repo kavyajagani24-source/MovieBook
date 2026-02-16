@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar';
 import { useAuth } from '@/contexts/AuthContext';
 import { bookingAPI } from '@/lib/api';
 import { BookingWithDetails, Customer } from '@/types';
-import { Calendar, MapPin, Clock, Ticket } from 'lucide-react';
+import { Calendar, MapPin, Clock, Ticket, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import ProtectedRoute from '@/components/ProtectedRoute';
 
@@ -15,6 +15,7 @@ const MyBookings = () => {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -22,12 +23,31 @@ const MyBookings = () => {
     }
   }, [user]);
 
-  const fetchBookings = async () => {
+  // Listen for visibility changes to refetch when user returns to this tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user) {
+        // Page became visible, refetch bookings silently
+        fetchBookings(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
+
+  const fetchBookings = async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    else setIsRefreshing(true);
+
     try {
       const response = await bookingAPI.getByCustomer((user as Customer).c_id);
       setBookings(response.data);
+      if (silent) toast.success('Bookings updated');
     } catch (error) {
-      toast.error('Failed to fetch bookings');
+      if (!silent) {
+        toast.error('Failed to fetch bookings');
+      }
       // Mock data for demo
       setBookings([
         {
@@ -61,7 +81,13 @@ const MyBookings = () => {
       ]);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchBookings(false);
   };
 
   if (isLoading) {
@@ -81,9 +107,21 @@ const MyBookings = () => {
         <Navbar />
         
         <main className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">My Bookings</h1>
-            <p className="text-muted-foreground">View and manage your movie bookings</p>
+          <div className="mb-8 flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">My Bookings</h1>
+              <p className="text-muted-foreground">View and manage your movie bookings</p>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
           </div>
 
           {bookings.length > 0 ? (

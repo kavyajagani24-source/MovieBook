@@ -105,19 +105,15 @@ const Home = () => {
       
       <main className="container mx-auto px-4 py-8">
         {/* Hero Section */}
-        <div className="mb-12 text-center space-y-4">
-          <h1 className="text-4xl md:text-6xl font-bold">
-            <span className="bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
-              Book Your Experience
-            </span>
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Discover the latest movies and book your tickets in seconds
-          </p>
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-2xl md:text-3xl font-semibold">Recommended Movies</h2>
+          <div className="text-sm text-muted-foreground">
+            <a href="#movies" className="hover:text-primary">See All →</a>
+          </div>
         </div>
 
         {/* Search and Filter */}
-        <div className="mb-8 flex flex-col md:flex-row gap-4">
+        <div className="mb-8 flex flex-col md:flex-row gap-4 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
@@ -128,21 +124,23 @@ const Home = () => {
               className="pl-10 bg-card border-border"
             />
           </div>
-          
-          <Select value={selectedGenre} onValueChange={setSelectedGenre}>
-            <SelectTrigger className="w-full md:w-48 bg-card border-border">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Genre" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Genres</SelectItem>
-              {genres.slice(1).map((genre) => (
-                <SelectItem key={genre} value={genre as string}>
-                  {genre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+          <div className="w-full md:w-56">
+            <Select onValueChange={(val) => setSelectedGenre(val)}>
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {selectedGenre === 'all' ? 'All Genres' : selectedGenre}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {genres.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {g === 'all' ? 'All Genres' : g}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Movies Grid */}
@@ -151,7 +149,7 @@ const Home = () => {
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
         ) : filteredMovies.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div id="movies" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredMovies.map((movie) => (
               <MovieCard key={movie.m_id} movie={movie} />
             ))}

@@ -337,7 +337,7 @@ Response: Ticket[]
 
 **Create Booking**
 ```
-POST /api/book
+POST /api/bookings
 Headers: Authorization: Bearer <token>
 Body: {
   ticket_no: number,

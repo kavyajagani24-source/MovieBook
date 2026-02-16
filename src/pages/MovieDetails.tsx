@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Movie, Show, Theatre } from '@/types';
-import { movieAPI, showsAPI } from '@/lib/api';
+import { movieAPI, showsAPI, BACKEND_BASE } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
@@ -125,11 +125,18 @@ const MovieDetails = () => {
           <div className="md:col-span-1">
             <Card className="overflow-hidden border-border">
               <div className="aspect-[2/3] bg-muted flex items-center justify-center">
-                {movie.poster_url ? (
-                  <img src={movie.poster_url} alt={movie.m_name} className="w-full h-full object-cover" />
-                ) : (
-                  <Film className="h-24 w-24 text-muted-foreground" />
-                )}
+                {
+                  (() => {
+                    const imgSrc = movie.poster_url
+                      ? (movie.poster_url.startsWith('http') ? movie.poster_url : `${BACKEND_BASE}${movie.poster_url}`)
+                      : undefined;
+                    return imgSrc ? (
+                      <img src={imgSrc} alt={movie.m_name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Film className="h-24 w-24 text-muted-foreground" />
+                    );
+                  })()
+                }
               </div>
             </Card>
           </div>

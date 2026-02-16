@@ -18,40 +18,53 @@ const AdminStats = () => {
   const fetchStats = async () => {
     try {
       const response = await adminAPI.getStats();
-      setStats(response.data);
-    } catch (error) {
-      // Mock data for demo
+      const d = response.data || {};
       setStats({
-        totalRevenue: 125000,
-        totalBookings: 542,
-        totalMovies: 12,
-        totalCustomers: 1234,
+        totalRevenue: Number(d.total_revenue ?? 0),
+        totalBookings: Number(d.total_bookings ?? 0),
+        totalMovies: Number(d.total_movies ?? 0),
+        totalCustomers: Number(d.total_customers ?? 0),
       });
+    } catch (error) {
+      console.warn('Admin stats (admin-only) failed, falling back to public stats:', error?.response?.status || error);
+      try {
+        const publicResp = await adminAPI.getPublicStats();
+        const pd = publicResp.data || {};
+        setStats({
+          totalRevenue: Number(pd.total_revenue ?? 0),
+          totalBookings: Number(pd.total_bookings ?? 0),
+          totalMovies: Number(pd.total_movies ?? 0),
+          totalCustomers: Number(pd.total_customers ?? 0),
+        });
+      } catch (pubErr) {
+        console.error('Failed to load public stats as fallback:', pubErr);
+        setStats({ totalRevenue: 0, totalBookings: 0, totalMovies: 0, totalCustomers: 0 });
+      }
     }
   };
 
   const statCards = [
     {
       title: 'Total Revenue',
-      value: `₹${stats.totalRevenue.toLocaleString()}`,
+      value: `₹${Number(stats.totalRevenue ?? 0).toLocaleString()}`,
       icon: DollarSign,
       color: 'text-primary',
     },
     {
       title: 'Total Bookings',
-      value: stats.totalBookings.toLocaleString(),
+      value: Number(stats.totalBookings ?? 0).toLocaleString(),
       icon: Ticket,
       color: 'text-gold',
     },
     {
       title: 'Active Movies',
-      value: stats.totalMovies.toLocaleString(),
+      value: Number(stats.totalMovies ?? 0).toLocaleString(),
       icon: Film,
       color: 'text-accent',
     },
     {
       title: 'Registered Customers',
-      value: stats.totalCustomers.toLocaleString(),
+      value: Number(stats.totalCustomers ?? 0).toLocaleString(),
       icon: Users,
       color: 'text-primary',
     },

@@ -26,8 +26,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const savedUser = localStorage.getItem('user');
     const savedIsAdmin = localStorage.getItem('is_admin') === 'true';
 
-    if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+    // Defensive parse: localStorage may contain the string 'undefined' or invalid JSON
+    let parsedUser: Customer | Admin | null = null;
+    if (savedUser && savedUser !== 'undefined') {
+      try {
+        parsedUser = JSON.parse(savedUser);
+      } catch (err) {
+        // Corrupt value — remove it so subsequent loads are clean
+        console.warn('AuthContext: failed to parse saved user, clearing localStorage user');
+        localStorage.removeItem('user');
+        parsedUser = null;
+      }
+    }
+
+    if (token && parsedUser) {
+      setUser(parsedUser);
       setIsAdmin(savedIsAdmin);
     }
     setIsLoading(false);
@@ -36,17 +49,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     try {
       const response = await customerAPI.login({ email_id: email, password });
-      const { token, user: userData } = response.data;
-      
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
+      const data = response.data || {};
+      const token = data.token;
+
+      // Server returns flat fields (c_id, c_name, email_id, token). Normalize to a user object.
+      const userData = data.user ?? {
+        c_id: data.c_id,
+        c_name: data.c_name,
+        email_id: data.email_id,
+      };
+
+      // Safely store token and user to avoid writing the string 'undefined'
+      if (token) {
+        localStorage.setItem('auth_token', token);
+      } else {
+        localStorage.removeItem('auth_token');
+      }
+
+      if (typeof userData !== 'undefined' && userData !== null) {
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData as any);
+      } else {
+        localStorage.removeItem('user');
+        setUser(null);
+      }
+
       localStorage.setItem('is_admin', 'false');
-      
-      setUser(userData);
       setIsAdmin(false);
       toast.success('Login successful!');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Login failed');
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Login failed');
       throw error;
     }
   };
@@ -54,17 +86,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const adminLogin = async (adminId: number, password: string) => {
     try {
       const response = await adminAPI.login({ admin_id: adminId, password });
-      const { token, user: adminData } = response.data;
-      
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('user', JSON.stringify(adminData));
+      const data = response.data || {};
+      const token = data.token;
+
+      // Server returns { admin_id, token }
+      const adminData = data.user ?? { admin_id: data.admin_id };
+
+      if (token) {
+        localStorage.setItem('auth_token', token);
+      } else {
+        localStorage.removeItem('auth_token');
+      }
+
+      if (typeof adminData !== 'undefined' && adminData !== null) {
+        localStorage.setItem('user', JSON.stringify(adminData));
+        setUser(adminData as any);
+      } else {
+        localStorage.removeItem('user');
+        setUser(null);
+      }
+
       localStorage.setItem('is_admin', 'true');
-      
-      setUser(adminData);
       setIsAdmin(true);
       toast.success('Admin login successful!');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Admin login failed');
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Admin login failed');
       throw error;
     }
   };
@@ -72,17 +118,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (data: any) => {
     try {
       const response = await customerAPI.signup(data);
-      const { token, user: userData } = response.data;
-      
-      localStorage.setItem('auth_token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
+      const resp = response.data || {};
+      const token = resp.token;
+
+      // Server returns { c_id, token } on signup. Build a local user object using signup data.
+      const userData = resp.user ?? {
+        c_id: resp.c_id,
+        c_name: data.c_name,
+        email_id: data.email_id,
+        phone_no: data.phone_no,
+        dob: data.dob || null,
+      };
+
+      if (token) {
+        localStorage.setItem('auth_token', token);
+      } else {
+        localStorage.removeItem('auth_token');
+      }
+
+      if (typeof userData !== 'undefined' && userData !== null) {
+        localStorage.setItem('user', JSON.stringify(userData));
+        setUser(userData as any);
+      } else {
+        localStorage.removeItem('user');
+        setUser(null);
+      }
+
       localStorage.setItem('is_admin', 'false');
-      
-      setUser(userData);
       setIsAdmin(false);
       toast.success('Signup successful!');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Signup failed');
+      toast.error(error.response?.data?.error || error.response?.data?.message || 'Signup failed');
       throw error;
     }
   };

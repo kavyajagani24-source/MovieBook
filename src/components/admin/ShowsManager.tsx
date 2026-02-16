@@ -14,6 +14,7 @@ const ShowsManager = () => {
   const [shows, setShows] = useState<Show[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingShow, setEditingShow] = useState<Show | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({ st_time: '', end_time: '', language: '', duration_weeks: 0, t_id: 0 });
 
   useEffect(() => {
@@ -21,11 +22,17 @@ const ShowsManager = () => {
   }, []);
 
   const fetchShows = async () => {
+    setIsLoading(true);
     try {
       const response = await showsAPI.getAll();
-      setShows(response.data);
+      // Normalize response - ensure it's an array
+      setShows(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
+      console.error('Failed to fetch shows:', error);
       toast.error('Failed to fetch shows');
+      setShows([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -87,28 +94,36 @@ const ShowsManager = () => {
           </DialogContent>
         </Dialog>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow><TableHead>ID</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Language</TableHead><TableHead>Theatre</TableHead><TableHead>Actions</TableHead></TableRow>
-        </TableHeader>
-        <TableBody>
-          {shows.map((s) => (
-            <TableRow key={s.show_id}>
-              <TableCell>{s.show_id}</TableCell>
-              <TableCell>{s.st_time}</TableCell>
-              <TableCell>{s.end_time}</TableCell>
-              <TableCell>{s.language}</TableCell>
-              <TableCell>{s.t_id}</TableCell>
-              <TableCell>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => { setEditingShow(s); setFormData({ st_time: s.st_time, end_time: s.end_time, language: s.language, duration_weeks: s.duration_weeks, t_id: s.t_id }); setIsDialogOpen(true); }}><Pencil className="h-3 w-3" /></Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(s.show_id)}><Trash2 className="h-3 w-3" /></Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : shows.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">No shows found</div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow><TableHead>ID</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Language</TableHead><TableHead>Theatre</TableHead><TableHead>Actions</TableHead></TableRow>
+          </TableHeader>
+          <TableBody>
+            {shows.map((s) => (
+              <TableRow key={s.show_id}>
+                <TableCell>{s.show_id}</TableCell>
+                <TableCell>{s.st_time}</TableCell>
+                <TableCell>{s.end_time}</TableCell>
+                <TableCell>{s.language}</TableCell>
+                <TableCell>{s.t_id}</TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setEditingShow(s); setFormData({ st_time: s.st_time, end_time: s.end_time, language: s.language, duration_weeks: s.duration_weeks, t_id: s.t_id }); setIsDialogOpen(true); }}><Pencil className="h-3 w-3" /></Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDelete(s.show_id)}><Trash2 className="h-3 w-3" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </Card>
   );
 };

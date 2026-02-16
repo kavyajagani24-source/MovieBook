@@ -96,7 +96,7 @@ const Auth = () => {
           <div className="flex items-center justify-center gap-2 mb-4">
             <Film className="h-10 w-10 text-primary" />
             <span className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              CineBook
+              MovieBook
             </span>
           </div>
           <p className="text-muted-foreground">Your gateway to cinematic experiences</p>

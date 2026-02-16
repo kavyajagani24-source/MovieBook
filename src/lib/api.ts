@@ -8,6 +8,9 @@ const api = axios.create({
   },
 });
 
+// Backend base (used by UI to build absolute URLs for assets)
+export const BACKEND_BASE = 'http://localhost:5000';
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
@@ -41,16 +44,18 @@ export default api;
 
 // Customer Auth
 export const customerAPI = {
-  signup: (data: any) => api.post('/customer/signup', data),
-  login: (data: any) => api.post('/customer/login', data),
-  getProfile: (c_id: number) => api.get(`/customer/${c_id}`),
-  updateProfile: (c_id: number, data: any) => api.put(`/customer/${c_id}`, data),
+  // server routes are mounted at /api/customers (note plural)
+  signup: (data: any) => api.post('/customers/signup', data),
+  login: (data: any) => api.post('/customers/login', data),
+  getProfile: (c_id: number) => api.get(`/customers/${c_id}`),
+  updateProfile: (c_id: number, data: any) => api.put(`/customers/${c_id}`, data),
 };
 
 // Admin Auth
 export const adminAPI = {
   login: (data: any) => api.post('/admin/login', data),
   getStats: () => api.get('/admin/stats'),
+  getPublicStats: () => api.get('/admin/stats/public'),
 };
 
 // Movies
@@ -99,10 +104,15 @@ export const ticketsAPI = {
 
 // Bookings
 export const bookingAPI = {
-  create: (data: any) => api.post('/book', data),
+  create: (data: any) => api.post('/bookings', data),
   getByCustomer: (c_id: number) => api.get(`/bookings/customer/${c_id}`),
   getAll: () => api.get('/bookings/all'),
   delete: (booking_id: number) => api.delete(`/bookings/${booking_id}`),
+};
+
+// Checkout (atomic ticket + booking creation)
+export const checkoutAPI = {
+  create: (data: any) => api.post('/checkout', data),
 };
 
 // Discounts

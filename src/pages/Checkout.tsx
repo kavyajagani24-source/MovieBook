@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { bookingAPI, ticketsAPI } from '@/lib/api';
+import { bookingAPI, ticketsAPI, checkoutAPI } from '@/lib/api';
 import { CheckCircle, CreditCard, Ticket } from 'lucide-react';
 import { Customer } from '@/types';
 
@@ -17,8 +17,9 @@ const Checkout = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [bookingComplete, setBookingComplete] = useState(false);
   const [bookingId, setBookingId] = useState<number | null>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
 
-  const { selectedSeats = [], totalAmount = 0 } = location.state || {};
+  const { selectedSeats = [], totalAmount = 0, discountCode = null } = location.state || {};
 
   const handlePayment = async () => {
     if (!user) {
@@ -30,38 +31,62 @@ const Checkout = () => {
     setIsProcessing(true);
     
     try {
-      // Create tickets for each selected seat
-      const ticketPromises = selectedSeats.map((seat: any) =>
-        ticketsAPI.create({
+      let ticketNo: number | null = null;
+      let bookingCreated = false;
+
+      // First, create a ticket for the first seat (we'll create one booking per first seat)
+      // In a real system, you'd create one ticket per seat or handle this differently
+      const firstSeat = selectedSeats[0];
+      
+      try {
+        // Use the new checkout endpoint which creates tickets and bookings in a single transaction
+        const storedUserRaw = localStorage.getItem('user');
+        let storedUser: any = null;
+        try { storedUser = storedUserRaw ? JSON.parse(storedUserRaw) : null; } catch(e) { storedUser = null; }
+        const possibleUser = (user as any) ?? storedUser;
+        const customerId = possibleUser?.c_id ?? possibleUser?.id ?? possibleUser?.customer_id ?? null;
+
+        if (!customerId) {
+          toast.error('Unable to determine customer ID. Please login again.');
+          setIsProcessing(false);
+          return;
+        }
+
+        // Build seats payload expected by the server
+        const seatsPayload = selectedSeats.map((s: any) => ({ seat_no: `${s.row}${s.number}`, price: s.price }));
+
+        const resp = await checkoutAPI.create({
           show_id: Number(showId),
           show_date: new Date().toISOString().split('T')[0],
-          show_time: '10:00', // Should come from show data
-          seat_no: seat.number,
+          show_time: '10:00',
+          seats: seatsPayload,
           hall_no: 1,
-          t_id: 1, // Should come from show data
-          price: seat.price,
-        })
-      );
+          t_id: 1,
+          admin_id: 1,
+          c_id: customerId,
+          offer_id: discountCode || null,
+        });
 
-      const ticketResponses = await Promise.all(ticketPromises);
-      const ticketNo = ticketResponses[0].data.ticket_no;
-
-      // Create booking
-      const bookingResponse = await bookingAPI.create({
-        ticket_no: ticketNo,
-        c_id: (user as Customer).c_id,
-      });
-
-      setBookingId(bookingResponse.data.booking_id);
-      setBookingComplete(true);
-      toast.success('Booking confirmed!');
+        const { tickets, bookings } = resp.data;
+        if (Array.isArray(bookings) && bookings.length > 0) {
+          setBookingId(bookings[0]);
+          setBookingComplete(true);
+          toast.success('Booking confirmed!');
+        } else {
+          toast.error('Booking failed: no booking ids returned');
+        }
+      } catch (err: any) {
+        console.error('Checkout error:', err.response?.data || err.message);
+        const msg = err.response?.data?.error || err.response?.data?.message || err.message || 'Booking failed';
+        toast.error(msg);
+      }
     } catch (error) {
       toast.error('Booking failed. Please try again.');
       console.error('Booking error:', error);
     } finally {
       setIsProcessing(false);
     }
-  };
+    };
 
   if (selectedSeats.length === 0) {
     return (
@@ -196,13 +221,19 @@ const Checkout = () => {
                     <span className="text-muted-foreground">Subtotal</span>
                     <span>₹{totalAmount}</span>
                   </div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm mb-2 text-green-600">
+                      <span className="text-muted-foreground">Discount Applied</span>
+                      <span>-₹{discountAmount}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-muted-foreground">Booking Fee</span>
-                    <span>₹{(totalAmount * 0.02).toFixed(2)}</span>
+                    <span>₹{((totalAmount - discountAmount) * 0.02).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
                     <span>Total</span>
-                    <span className="text-primary">₹{(totalAmount * 1.02).toFixed(2)}</span>
+                    <span className="text-primary">₹{((totalAmount - discountAmount) * 1.02).toFixed(2)}</span>
                   </div>
                 </div>
               </div>

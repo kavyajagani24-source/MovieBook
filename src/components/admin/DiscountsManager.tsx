@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 const DiscountsManager = () => {
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({ m_name: '', price: 0 });
 
   useEffect(() => {
@@ -20,11 +21,17 @@ const DiscountsManager = () => {
   }, []);
 
   const fetchDiscounts = async () => {
+    setIsLoading(true);
     try {
       const response = await discountAPI.getAll();
-      setDiscounts(response.data);
+      // Normalize response - ensure it's an array
+      setDiscounts(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
+      console.error('Failed to fetch discounts:', error);
       toast.error('Failed to fetch discounts');
+      setDiscounts([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -43,41 +50,55 @@ const DiscountsManager = () => {
 
   return (
     <Card className="p-6 border-border">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-semibold">Discounts Management</h2>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Add Discount</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add Discount</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2"><Label>Movie Name</Label><Input value={formData.m_name} onChange={(e) => setFormData({ ...formData, m_name: e.target.value })} required /></div>
-              <div className="space-y-2"><Label>Discounted Price</Label><Input type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} required /></div>
-              <div className="flex gap-2 justify-end">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button type="submit">Create</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+      <div className="mb-6">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-2xl font-semibold">Discounts Management</h2>
+            <p className="text-sm text-muted-foreground mt-1">Set promotional ticket prices for specific movies. The "Discounted Price" is the special offer price shown to customers during booking.</p>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" />Add Discount</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Add Discount</DialogTitle></DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2"><Label>Movie Name</Label><Input value={formData.m_name} onChange={(e) => setFormData({ ...formData, m_name: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Discounted Price</Label><Input type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })} required /></div>
+                <div className="flex gap-2 justify-end">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit">Create</Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow><TableHead>ID</TableHead><TableHead>Movie</TableHead><TableHead>Price</TableHead></TableRow>
-        </TableHeader>
-        <TableBody>
-          {discounts.map((d) => (
-            <TableRow key={d.offer_id}>
-              <TableCell>{d.offer_id}</TableCell>
-              <TableCell>{d.m_name}</TableCell>
-              <TableCell>₹{d.price}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : discounts.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">No discounts currently active</div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow><TableHead>ID</TableHead><TableHead>Movie</TableHead><TableHead>Discounted Price</TableHead></TableRow>
+          </TableHeader>
+          <TableBody>
+            {discounts.map((d) => (
+              <TableRow key={d.offer_id}>
+                <TableCell>{d.offer_id}</TableCell>
+                <TableCell>{d.m_name}</TableCell>
+                <TableCell>₹{d.price}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </Card>
   );
 };
 
 export default DiscountsManager;
+
