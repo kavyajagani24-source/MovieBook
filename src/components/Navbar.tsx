@@ -33,14 +33,24 @@ const Navbar = () => {
             {user ? (
               <>
                 {isAdmin ? (
-                  <Button
-                    variant="ghost"
-                    onClick={() => navigate('/admin')}
-                    className="gap-2"
-                  >
-                    <LayoutDashboard className="h-4 w-4" />
-                    Dashboard
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      onClick={() => navigate('/admin')}
+                      className="gap-2"
+                    >
+                      <LayoutDashboard className="h-4 w-4" />
+                      Dashboard
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate('/admin/distributed')}
+                      className="gap-2 border-primary/50 text-primary hover:bg-primary/10"
+                    >
+                      Distributed Systems
+                    </Button>
+                  </>
                 ) : (
                   <Button
                     variant="ghost"

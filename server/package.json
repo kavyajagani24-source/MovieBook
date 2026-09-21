@@ -4,7 +4,13 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "init:ft-db": "node ./scripts/initFtDb.js",
+    "server:1": "node index.js",
+    "server:2": "node index.js",
+    "server:3": "node index.js",
+    "server:backup": "node index.js",
+    "cluster:start": "node ./scripts/startCluster.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

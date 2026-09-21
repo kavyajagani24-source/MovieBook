@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { routeDistributedCheckout } from './distributedRouter';
 
 // Configure axios instance
 const api = axios.create({
@@ -110,9 +111,9 @@ export const bookingAPI = {
   delete: (booking_id: number) => api.delete(`/bookings/${booking_id}`),
 };
 
-// Checkout (atomic ticket + booking creation)
+// Checkout (routed through healthy distributed application servers with automatic failover)
 export const checkoutAPI = {
-  create: (data: any) => api.post('/checkout', data),
+  create: (data: any, preferredNodeId?: number) => routeDistributedCheckout(data, preferredNodeId),
 };
 
 // Discounts
@@ -121,4 +122,20 @@ export const discountAPI = {
   create: (data: any) => api.post('/discounts', data),
   update: (offer_id: number, data: any) => api.put(`/discounts/${offer_id}`, data),
   delete: (offer_id: number) => api.delete(`/discounts/${offer_id}`),
+};
+
+// Distributed Systems APIs
+export const distributedAPI = {
+  getNodes: () => api.get('/distributed/nodes'),
+  getStatus: () => api.get('/distributed/status'),
+  getClocks: () => api.get('/distributed/clocks'),
+  getRpcLogs: () => api.get('/distributed/rpc/logs'),
+  sendRpc: (method: string, params: any) => api.post('/distributed/rpc', { method, params }),
+  runConcurrencyTest: (data: any) => api.post('/distributed/concurrency-test', data),
+  syncBerkeleyClocks: () => api.post('/distributed/berkeley/sync'),
+  runBullyElection: () => api.post('/distributed/election/bully'),
+  runRingElection: () => api.post('/distributed/election/ring'),
+  getReplicationStatus: () => api.get('/distributed/replication/status'),
+  simulateFailure: (nodeId?: number, offline?: boolean) => api.post('/distributed/simulate-failure', { nodeId, offline }),
+  promoteBackup: (nodeId?: number) => api.post(`/distributed/promote-backup`, nodeId ? { nodeId } : {}),
 };

@@ -1,627 +1,164 @@
-# Cinema Booking Web App (Frontend)
+# 🎬 MovieBook — Distributed Cinema Booking System
 
-Complete cinema booking system built with React, TypeScript, TailwindCSS, and Axios. This is a frontend-only implementation with clear API integration points for a Node.js + MySQL backend.
-
-## 🎬 Features
-
-### Customer Features
-- Browse movies with search and filters
-- View movie details and available shows
-- Interactive seat selection
-- Secure booking and checkout flow
-- View booking history
-- Profile management
-- User authentication (signup/login)
-
-### Admin Features
-- Complete admin dashboard
-- CRUD operations for:
-  - Movies
-  - Theatres
-  - Shows
-  - Seats
-  - Tickets
-  - Bookings
-  - Discounts
-- System statistics and analytics
-- Admin authentication
-
-## 🗂️ Database Schema
-
-The frontend is designed to work with these MySQL tables:
-
-```sql
-Theatre (t_id, t_name, location)
-Seats (seat_id, seat_name, no_of_seats, t_id)
-Admin (admin_id, password, salary)
-Discount (offer_id, m_name, price)
-Movie (m_id, m_name, release_date, director, actors)
-Shows (show_id, st_time, end_time, language, duration_weeks, t_id)
-Tickets (ticket_no, show_id, show_date, show_time, seat_no, hall_no, t_id, price, admin_id)
-Customer (c_id, c_name, email_id, phone_no, password, dob)
-Booking (booking_id, booking_date, ticket_no, c_id)
-```
-
-## 📁 Project Structure
-
-```
-src/
-├── components/
-│   ├── ui/                 # Shadcn UI components
-│   ├── admin/              # Admin dashboard components
-│   ├── MovieCard.tsx       # Movie card component
-│   ├── Navbar.tsx          # Navigation bar
-│   └── ProtectedRoute.tsx  # Route protection wrapper
-├── pages/
-│   ├── Home.tsx            # Movie listing page
-│   ├── Auth.tsx            # Login/Signup/Admin login
-│   ├── MovieDetails.tsx    # Movie details and shows
-│   ├── SeatSelection.tsx   # Interactive seat selection
-│   ├── Checkout.tsx        # Booking checkout
-│   ├── MyBookings.tsx      # User booking history
-│   ├── Profile.tsx         # User profile management
-│   └── AdminDashboard.tsx  # Admin management panel
-├── contexts/
-│   └── AuthContext.tsx     # Authentication context
-├── lib/
-│   └── api.ts              # Axios API configuration
-├── types/
-│   └── index.ts            # TypeScript interfaces
-└── App.tsx                 # Main app with routing
-```
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js (v18+)
-- npm or yarn
-
-### Installation
-
-1. Clone the repository
-```bash
-git clone <your-repo-url>
-cd <project-name>
-```
-
-2. Install dependencies
-```bash
-npm install
-```
-
-3. Start development server
-```bash
-npm run dev
-```
-
-The app will run on `http://localhost:8080`
-
-### Build for Production
-```bash
-npm run build
-```
-
-## 🔌 Backend API Integration
-
-The frontend expects a Node.js + MySQL backend running at `http://localhost:5000/api`. All API calls are configured in `src/lib/api.ts`.
-
-### Authentication
-
-**Customer Signup**
-```
-POST /api/customer/signup
-Body: {
-  c_name: string,
-  email_id: string,
-  phone_no: string,
-  password: string,
-  dob: string (YYYY-MM-DD)
-}
-Response: {
-  token: string,
-  user: Customer
-}
-```
-
-**Customer Login**
-```
-POST /api/customer/login
-Body: {
-  email_id: string,
-  password: string
-}
-Response: {
-  token: string,
-  user: Customer
-}
-```
-
-**Admin Login**
-```
-POST /api/admin/login
-Body: {
-  admin_id: number,
-  password: string
-}
-Response: {
-  token: string,
-  user: Admin
-}
-```
-
-### Movies
-
-**Get All Movies**
-```
-GET /api/movies
-Query params: search, genre (optional)
-Response: Movie[]
-```
-
-**Get Movie by ID**
-```
-GET /api/movies/:m_id
-Response: Movie
-```
-
-**Create Movie (Admin)**
-```
-POST /api/movies
-Headers: Authorization: Bearer <token>
-Body: {
-  m_name: string,
-  release_date: string,
-  director: string,
-  actors: string,
-  genre: string,
-  rating: string,
-  description: string
-}
-Response: Movie
-```
-
-**Update Movie (Admin)**
-```
-PUT /api/movies/:m_id
-Headers: Authorization: Bearer <token>
-Body: Partial<Movie>
-Response: Movie
-```
-
-**Delete Movie (Admin)**
-```
-DELETE /api/movies/:m_id
-Headers: Authorization: Bearer <token>
-Response: { success: boolean }
-```
-
-### Theatres
-
-**Get All Theatres**
-```
-GET /api/theatres
-Response: Theatre[]
-```
-
-**Get Theatre by ID**
-```
-GET /api/theatres/:t_id
-Response: Theatre
-```
-
-**Create Theatre (Admin)**
-```
-POST /api/theatres
-Body: {
-  t_name: string,
-  location: string
-}
-Response: Theatre
-```
-
-**Update Theatre (Admin)**
-```
-PUT /api/theatres/:t_id
-Body: Partial<Theatre>
-Response: Theatre
-```
-
-**Delete Theatre (Admin)**
-```
-DELETE /api/theatres/:t_id
-Response: { success: boolean }
-```
-
-### Seats
-
-**Get Seats by Theatre**
-```
-GET /api/theatres/:t_id/seats
-Response: Seats[]
-```
-
-**Create Seats (Admin)**
-```
-POST /api/seats
-Body: {
-  seat_name: string,
-  no_of_seats: number,
-  t_id: number
-}
-Response: Seats
-```
-
-**Update Seats (Admin)**
-```
-PUT /api/seats/:seat_id
-Body: Partial<Seats>
-Response: Seats
-```
-
-**Delete Seats (Admin)**
-```
-DELETE /api/seats/:seat_id
-Response: { success: boolean }
-```
-
-### Shows
-
-**Get Shows by Movie**
-```
-GET /api/movies/:m_id/shows
-Response: Show[]
-```
-
-**Get All Shows**
-```
-GET /api/shows
-Response: Show[]
-```
-
-**Create Show (Admin)**
-```
-POST /api/shows
-Body: {
-  st_time: string (HH:MM),
-  end_time: string (HH:MM),
-  language: string,
-  duration_weeks: number,
-  t_id: number
-}
-Response: Show
-```
-
-**Update Show (Admin)**
-```
-PUT /api/shows/:show_id
-Body: Partial<Show>
-Response: Show
-```
-
-**Delete Show (Admin)**
-```
-DELETE /api/shows/:show_id
-Response: { success: boolean }
-```
-
-### Tickets
-
-**Create Ticket**
-```
-POST /api/tickets/create
-Body: {
-  show_id: number,
-  show_date: string (YYYY-MM-DD),
-  show_time: string (HH:MM),
-  seat_no: number,
-  hall_no: number,
-  t_id: number,
-  price: number
-}
-Response: Ticket
-```
-
-**Get Ticket by ID**
-```
-GET /api/tickets/:ticket_no
-Response: Ticket
-```
-
-**Get All Tickets (Admin)**
-```
-GET /api/tickets
-Response: Ticket[]
-```
-
-### Bookings
-
-**Create Booking**
-```
-POST /api/bookings
-Headers: Authorization: Bearer <token>
-Body: {
-  ticket_no: number,
-  c_id: number
-}
-Response: Booking
-```
-
-**Get Customer Bookings**
-```
-GET /api/bookings/customer/:c_id
-Headers: Authorization: Bearer <token>
-Response: BookingWithDetails[]
-```
-
-**Get All Bookings (Admin)**
-```
-GET /api/bookings/all
-Headers: Authorization: Bearer <token>
-Response: Booking[]
-```
-
-**Delete Booking (Admin)**
-```
-DELETE /api/bookings/:booking_id
-Headers: Authorization: Bearer <token>
-Response: { success: boolean }
-```
-
-### Discounts
-
-**Get All Discounts**
-```
-GET /api/discounts
-Response: Discount[]
-```
-
-**Create Discount (Admin)**
-```
-POST /api/discounts
-Body: {
-  m_name: string,
-  price: number
-}
-Response: Discount
-```
-
-**Update Discount (Admin)**
-```
-PUT /api/discounts/:offer_id
-Body: Partial<Discount>
-Response: Discount
-```
-
-**Delete Discount (Admin)**
-```
-DELETE /api/discounts/:offer_id
-Response: { success: boolean }
-```
-
-### Admin Stats
-
-**Get Statistics**
-```
-GET /api/admin/stats
-Headers: Authorization: Bearer <token>
-Response: {
-  totalRevenue: number,
-  totalBookings: number,
-  totalMovies: number,
-  totalCustomers: number
-}
-```
-
-## 🔐 Authentication Flow
-
-1. User logs in via `/auth` page
-2. Backend returns JWT token and user data
-3. Token stored in `localStorage` as `auth_token`
-4. Axios interceptor adds token to all requests
-5. Protected routes check for valid token
-6. 401 responses trigger automatic logout
-
-## 📊 Sample Seed Data
-
-### Theatres
-```json
-[
-  { "t_name": "PVR Cinemas", "location": "Downtown Plaza, Main Street" },
-  { "t_name": "INOX Megaplex", "location": "Mall Road, City Center" },
-  { "t_name": "Cinepolis", "location": "Garden City Mall" }
-]
-```
-
-### Movies
-```json
-[
-  {
-    "m_name": "The Dark Cinema",
-    "release_date": "2024-01-15",
-    "director": "Christopher Nolan",
-    "actors": "Christian Bale, Heath Ledger, Aaron Eckhart",
-    "genre": "Action",
-    "rating": "9.0",
-    "description": "Epic superhero thriller"
-  },
-  {
-    "m_name": "Romance in Paris",
-    "release_date": "2024-02-20",
-    "director": "Sofia Coppola",
-    "actors": "Emma Stone, Ryan Gosling",
-    "genre": "Romance",
-    "rating": "8.5",
-    "description": "Beautiful love story in Paris"
-  }
-]
-```
-
-### Shows
-```json
-[
-  {
-    "st_time": "10:00",
-    "end_time": "12:30",
-    "language": "English",
-    "duration_weeks": 4,
-    "t_id": 1
-  },
-  {
-    "st_time": "14:00",
-    "end_time": "16:30",
-    "language": "English",
-    "duration_weeks": 4,
-    "t_id": 1
-  }
-]
-```
-
-### Seats
-```json
-[
-  {
-    "seat_name": "Premium",
-    "no_of_seats": 50,
-    "t_id": 1
-  },
-  {
-    "seat_name": "Standard",
-    "no_of_seats": 100,
-    "t_id": 1
-  }
-]
-```
-
-### Admin Credentials
-```json
-{
-  "admin_id": 1,
-  "password": "admin123",
-  "salary": 50000
-}
-```
-
-## 🛠️ Backend Setup Guide
-
-### Required Node.js Packages
-```bash
-npm install express mysql2 bcrypt jsonwebtoken cors dotenv
-```
-
-### MySQL Connection Example
-```javascript
-const mysql = require('mysql2/promise');
-
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'your_password',
-  database: 'cinema_booking',
-  waitForConnections: true,
-  connectionLimit: 10,
-});
-```
-
-### JWT Middleware Example
-```javascript
-const jwt = require('jsonwebtoken');
-
-const authenticateToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
-  
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
-    req.user = user;
-    next();
-  });
-};
-```
-
-### Sample Backend Route
-```javascript
-// Get all movies
-app.get('/api/movies', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM Movie');
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Create booking
-app.post('/api/book', authenticateToken, async (req, res) => {
-  const { ticket_no, c_id } = req.body;
-  try {
-    const [result] = await pool.query(
-      'INSERT INTO Booking (booking_date, ticket_no, c_id) VALUES (NOW(), ?, ?)',
-      [ticket_no, c_id]
-    );
-    res.json({ booking_id: result.insertId });
-  } catch (error) {
-    res.status(500).json({ message: 'Booking failed' });
-  }
-});
-```
-
-## 🎨 Frontend Features
-
-- **Responsive Design**: Mobile-first approach with TailwindCSS
-- **Dark Theme**: Cinema-inspired dark theme with red/gold accents
-- **Form Validation**: Client-side validation for all forms
-- **Error Handling**: Toast notifications for all operations
-- **Loading States**: Spinners and loading indicators
-- **Protected Routes**: Authentication-based route protection
-- **Admin Dashboard**: Complete CRUD interface for all entities
-
-## 🔄 State Management
-
-- **React Context**: Used for authentication state
-- **React Query**: For server state management (installed, ready to use)
-- **Local Storage**: For persisting auth tokens
-
-## 📱 Routes
-
-```
-/                    - Home (Movie listing)
-/auth                - Login/Signup/Admin login
-/movie/:id           - Movie details and shows
-/book/:showId        - Seat selection
-/checkout/:showId    - Checkout and payment
-/bookings            - User booking history
-/profile             - User profile management
-/admin               - Admin dashboard
-```
-
-## 🧪 Testing the Frontend
-
-1. Start the app: `npm run dev`
-2. The app will show mock data initially
-3. To connect to backend: Update `baseURL` in `src/lib/api.ts`
-4. Test customer flow: Browse → Select movie → Choose seats → Checkout
-5. Test admin flow: Login as admin → Manage all entities
-
-## 📝 Next Steps
-
-1. **Set up MySQL database** with provided schema
-2. **Create Node.js backend** using Express
-3. **Implement API endpoints** as documented above
-4. **Update API base URL** in `src/lib/api.ts`
-5. **Seed database** with sample data
-6. **Test integration** between frontend and backend
-
-## 🤝 Contributing
-
-This is a complete frontend implementation ready to connect to any Node.js + MySQL backend that follows the documented API structure.
-
-## 📄 License
-
-MIT License - Feel free to use this project for learning or commercial purposes.
+MovieBook is a full-stack cinema booking application enhanced into a **4-node Distributed System** featuring active-active request routing, transaction concurrency control, Berkeley clock synchronization, election algorithms (Bully & Ring), and primary-backup replication to a separate fault-tolerance database.
 
 ---
 
-Built with ❤️ using React, TypeScript, and TailwindCSS
+## 🏗️ 1. Distributed System Architecture
+
+```plaintext
+                              ┌─────────────────────────┐
+                              │  React 18 SPA Frontend   │
+                              │   (Vite @ Port 8080)    │
+                              └────────────┬────────────┘
+                                           │
+                                  Distributed Router
+                      (Auto-Detects Healthy Node & Idempotency)
+                                           │
+              ┌────────────────────────────┼────────────────────────────┐
+              │                            │                            │
+              ▼                            ▼                            ▼
+     ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
+     │ Application Node 1│         │ Application Node 2│         │ Application Node 3│
+     │    (Port 5000)   │         │    (Port 5001)   │         │    (Port 5002)   │
+     │ Offset: +5000ms  │         │ Offset: -3000ms  │         │ Offset: +8000ms  │
+     └────────┬─────────┘         └────────┬─────────┘         └────────┬─────────┘
+              │                            │                            │
+              └────────────────────────────┼────────────────────────────┘
+                                           ▼
+                           ┌───────────────────────────────┐
+                           │    Main MySQL Database        │
+                           │       `moviebooking`          │
+                           │  • Tickets, Bookings, Shows   │
+                           │  • distributed_booking_metadata│
+                           │  • idempotency_keys           │
+                           └───────────────┬───────────────┘
+                                           │
+                                  Replication Layer
+                               (HTTP RPC & Asynchronous)
+                                           │
+                                           ▼
+                           ┌───────────────────────────────┐
+                           │   Dedicated Backup Server     │
+                           │     Node 4 (Port 5003)        │
+                           │   Standby / Promotable Primary│
+                           └───────────────┬───────────────┘
+                                           │
+                                           ▼
+                           ┌───────────────────────────────┐
+                           │   Fault-Tolerance Database    │
+                           │ `moviebooking_fault_tolerance`│
+                           │  • replicated_bookings        │
+                           │  • replication_log            │
+                           │  • election_log               │
+                           │  • clock_sync_log             │
+                           │  • distributed_request_log    │
+                           └───────────────────────────────┘
+```
+
+---
+
+## 🚀 2. Quick Start Guide
+
+### Step 1: Database Initialization
+Ensure MySQL is running on `localhost:3306`. Initialize both databases and tables:
+```bash
+cd server
+npm run init:ft-db
+```
+
+### Step 2: Start All 4 Backend Cluster Nodes
+You can launch all 4 server nodes concurrently in a single command:
+```bash
+cd server
+npm run cluster:start
+```
+*Or start them in separate terminals:*
+- **Server 1**: `npm run server:1` *(Port 5000, ID: 1, Offset: +5000ms)*
+- **Server 2**: `npm run server:2` *(Port 5001, ID: 2, Offset: -3000ms)*
+- **Server 3**: `npm run server:3` *(Port 5002, ID: 3, Offset: +8000ms)*
+- **Backup Server**: `npm run server:backup` *(Port 5003, ID: 4, Offset: 0ms)*
+
+### Step 3: Start the Frontend
+In the root directory:
+```bash
+npm run dev
+```
+Open **[http://localhost:8080](http://localhost:8080)** in your browser.
+
+---
+
+## 🎛️ 3. Distributed Systems Admin Dashboard
+- **URL**: `http://localhost:8080/admin/distributed`
+- **Admin Login**: Admin ID: `1`, Password: `adminpass1`
+- Provides real-time interactive panels for:
+  - **Node Registry**: Live statuses, ports, clocks, offsets, roles, coordinators.
+  - **Experiment 1 (Client-Server / RPC)**: Dispatch remote procedure calls (`getMovie`, `checkSeatAvailability`, `calculateBookingTotal`) with latency tracking.
+  - **Experiment 2 (Concurrency / Multithreading)**: Stress-test simultaneous bookings for the same seat/show to verify transaction isolation and double-booking prevention.
+  - **Experiment 3 (Berkeley Clock Synchronization)**: Poll clocks across nodes, compute mathematical mean adjustment, and synchronize cluster clocks.
+  - **Experiment 4 (Leader Elections)**: Trigger Bully Election or Ring Election and watch the live message flow and winner announcement.
+  - **Experiment 5 (Fault Tolerance & Replication)**: Live records from `moviebooking_fault_tolerance`, simulated server failure, and 1-click Backup promotion to Primary.
+  - **Admin Node Probe**: Explicitly target Server 1, 2, or 3 to prove all active nodes execute bookings and replicate state.
+
+---
+
+## 🔬 4. The 5 Distributed Systems Experiments Explained
+
+### **Experiment 1: Client-Server / RPC Communication**
+- **Architecture**: React frontend acts as the client invoking remote Express procedure calls.
+- **Endpoint**: `POST /api/distributed/rpc`
+- **Payload**:
+  ```json
+  { "method": "getMovie", "params": { "movieId": 1 } }
+  ```
+- **Response**: Returns procedure output, responding `serverId`, timestamp, and execution duration in milliseconds.
+
+### **Experiment 2: Multithreading & Concurrent Bookings**
+- **Problem**: In high-demand cinema releases, multiple customers attempt to book the exact same seat simultaneously.
+- **Solution**: The backend executes within an atomic SQL Transaction utilizing **pessimistic locking** (`SELECT ticket_no FROM Tickets WHERE show_id = ? AND seat_no = ? FOR UPDATE`).
+- **Endpoint**: `POST /api/distributed/concurrency-test`
+- **Demonstration**: Launching 10 parallel requests yields **exactly 1 SUCCESS** and **9 SEAT_ALREADY_OCCUPIED rejections**.
+
+### **Experiment 3: Berkeley Clock Synchronization**
+- **Algorithm**:
+  1. A Coordinator node polls all participating application servers (Node 1, 2, 3) for their distributed clocks.
+  2. Coordinator computes relative differences: `diff_i = time_i - referenceTime`.
+  3. Computes average adjustment: `avgDiff = sum(diff_i) / N`.
+  4. Dispatches adjustment deltas: `adjustment_i = avgDiff - diff_i`.
+  5. Each node adjusts its local offset so clocks mathematically converge.
+- **Endpoint**: `POST /api/distributed/berkeley/sync`
+
+### **Experiment 4: Election Algorithms (Bully & Ring)**
+- **Bully Election**:
+  - Initiating node sends `ELECTION` to all higher-ID nodes.
+  - If higher nodes respond, the highest active ID wins. If none respond, initiator wins.
+  - Victor broadcasts `COORDINATOR` victory announcement to all lower peers.
+  - **Endpoint**: `POST /api/distributed/election/bully`
+- **Ring Election**:
+  - Nodes form logical ring `1 -> 2 -> 3 -> 1`.
+  - An election token containing active node IDs circulates the ring.
+  - When the token returns to the initiator, the node with `MAX(token)` is elected coordinator.
+  - **Endpoint**: `POST /api/distributed/election/ring`
+
+### **Experiment 5: Fault Tolerance & Primary-Backup Replication**
+- **Architecture**:
+  - Every committed booking on an Application Server (Node 1, 2, 3) writes to `moviebooking` and asynchronously replicates to Backup Server (Node 4) and the separate database `moviebooking_fault_tolerance`.
+  - If a primary server fails, the frontend distributed router automatically routes subsequent booking requests to another healthy server or the promoted backup server.
+  - Supports idempotency keys (`X-Booking-Request-ID`) to prevent duplicate bookings during network retries.
+- **Endpoints**:
+  - `GET /api/distributed/replication/status`
+  - `POST /api/distributed/simulate-failure`
+  - `POST /api/distributed/promote-backup`
+
+---
+
+## 🎓 5. Viva / Oral Exam Quick Reference
+
+| Concept | Explanation for Examiners |
+| :--- | :--- |
+| **RPC** | "React acts as client; Express servers act as remote services. Invocations execute real backend functions with latency and server ID stamps." |
+| **Concurrency** | "Protects shared resources (seats). MySQL transactions with `FOR UPDATE` pessimistic locking serialize conflicting requests atomically." |
+| **Berkeley Algorithm** | "Coordinator polls distributed clocks from active nodes, computes the mean relative difference, and informs each node of its calculated delta." |
+| **Bully Election** | "Nodes with higher IDs take precedence. Any node detecting failure can initiate; the highest surviving ID wins." |
+| **Ring Election** | "A message token accumulates active IDs in a logical ring topology. When returned to the initiator, the maximum ID is declared coordinator." |
+| **Primary-Backup** | "Active nodes process client writes and replicate state to a dedicated backup server and a separate fault-tolerance database (`moviebooking_fault_tolerance`)." |

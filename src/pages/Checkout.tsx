@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { bookingAPI, ticketsAPI, checkoutAPI } from '@/lib/api';
+import { routeDistributedCheckout } from '@/lib/distributedRouter';
 import { CheckCircle, CreditCard, Ticket } from 'lucide-react';
 import { Customer } from '@/types';
 
@@ -55,7 +56,7 @@ const Checkout = () => {
         // Build seats payload expected by the server
         const seatsPayload = selectedSeats.map((s: any) => ({ seat_no: `${s.row}${s.number}`, price: s.price }));
 
-        const resp = await checkoutAPI.create({
+        const resp = await routeDistributedCheckout({
           show_id: Number(showId),
           show_date: new Date().toISOString().split('T')[0],
           show_time: '10:00',
