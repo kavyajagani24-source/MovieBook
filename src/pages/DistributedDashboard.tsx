@@ -241,13 +241,27 @@ const DistributedDashboard = () => {
         c_id: 1
       }, targetServerId);
 
+      const wasRedirected = resp.data?.redirectedToBackup === true;
+      const servedBy = resp.data?.servedBy ?? targetServerId;
+
       setTargetBookingResult({
         status: 'SUCCESS',
         targetedNode: targetServerId,
+        servedBy,
+        redirectedToBackup: wasRedirected,
+        failoverReason: resp.data?.failoverReason,
         seat: uniqueSeat,
         data: resp.data
       });
-      toast.success(`Booking successfully executed through targeted Server ${targetServerId}!`);
+
+      if (wasRedirected) {
+        toast.success(
+          `Node ${targetServerId} was OFFLINE → Auto-redirected to Backup Server (Node 4) which is now PRIMARY!`,
+          { duration: 6000 }
+        );
+      } else {
+        toast.success(`Booking successfully executed through targeted Server ${targetServerId}!`);
+      }
       fetchClusterData(true);
     } catch (err: any) {
       setTargetBookingResult({
@@ -255,7 +269,7 @@ const DistributedDashboard = () => {
         targetedNode: targetServerId,
         error: err.response?.data?.error || err.message
       });
-      toast.error(`Targeted booking on Server ${targetServerId} failed`);
+      toast.error(err.response?.data?.error || err.message || `Targeted booking on Server ${targetServerId} failed`, { duration: 7000 });
     } finally {
       setIsTargetBookingRunning(false);
     }
@@ -887,7 +901,7 @@ const DistributedDashboard = () => {
                   <div>
                     <h3 className="text-xl font-bold">Admin Distributed Booking Probe</h3>
                     <p className="text-sm text-muted-foreground">
-                      Directly target a specific application server (Server 1, Server 2, or Server 3) to prove that all active nodes process genuine MovieBook bookings and replicate them to the Backup server.
+                      Directly target Server 1, 2, or 3. If the targeted server is <strong>OFFLINE</strong> and the Backup Server (Node 4) has been <strong>promoted to Primary</strong>, requests are <strong>automatically redirected</strong> to Node 4 — proving transparent failover.
                     </p>
                   </div>
                 </div>
@@ -916,20 +930,41 @@ const DistributedDashboard = () => {
                 </div>
 
                 {targetBookingResult && (
-                  <div className="p-4 bg-muted/20 border border-border rounded-lg text-xs font-mono">
-                    <div className="flex items-center gap-2 mb-2 font-bold">
-                      {targetBookingResult.status === 'SUCCESS' ? (
-                        <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-destructive" />
-                      )}
-                      <span className={targetBookingResult.status === 'SUCCESS' ? 'text-emerald-500' : 'text-destructive'}>
-                        Target Server {targetBookingResult.targetedNode} Execution: {targetBookingResult.status}
-                      </span>
+                  <div className="space-y-3">
+                    {/* Failover banner */}
+                    {targetBookingResult.redirectedToBackup && (
+                      <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
+                        <div className="text-sm">
+                          <div className="font-bold text-base mb-1">🔄 FAILOVER ACTIVE — Redirected to Backup Server</div>
+                          <div><span className="font-semibold">Targeted Node:</span> Server {targetBookingResult.targetedNode} (OFFLINE)</div>
+                          <div><span className="font-semibold">Actually Served By:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold">Backup Server (Node 4) — Promoted PRIMARY</span></div>
+                          {targetBookingResult.failoverReason && (
+                            <div className="mt-1 text-xs opacity-80">{targetBookingResult.failoverReason}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Result payload */}
+                    <div className="p-4 bg-muted/20 border border-border rounded-lg text-xs font-mono">
+                      <div className="flex items-center gap-2 mb-2 font-bold">
+                        {targetBookingResult.status === 'SUCCESS' ? (
+                          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-destructive" />
+                        )}
+                        <span className={targetBookingResult.status === 'SUCCESS' ? 'text-emerald-500' : 'text-destructive'}>
+                          {targetBookingResult.redirectedToBackup
+                            ? `Targeted Server ${targetBookingResult.targetedNode} → Served by Backup Node 4: ${targetBookingResult.status}`
+                            : `Target Server ${targetBookingResult.targetedNode} Execution: ${targetBookingResult.status}`
+                          }
+                        </span>
+                      </div>
+                      <pre className="overflow-x-auto p-2 bg-background rounded border border-border/50">
+                        {JSON.stringify(targetBookingResult, null, 2)}
+                      </pre>
                     </div>
-                    <pre className="overflow-x-auto p-2 bg-background rounded border border-border/50">
-                      {JSON.stringify(targetBookingResult, null, 2)}
-                    </pre>
                   </div>
                 )}
               </Card>
