@@ -47,40 +47,47 @@ const router = express.Router();
 // -------------------------------------------------------------
 
 // GET /api/distributed/nodes - Live health status of all 4 cluster nodes
-router.get("/nodes", async (req, res) => {
-  const nodes = [];
+const PUBLIC_PORTS = { 1: 5000, 2: 5001, 3: 5002, 4: 5003 };
 
-  for (const peer of CLUSTER_PEERS) {
+function offlineNode(peer) {
+  return {
+    nodeId: peer.nodeId,
+    role: peer.role,
+    port: PUBLIC_PORTS[peer.nodeId] || peer.port,
+    url: peer.url,
+    status: "OFFLINE",
+    currentClock: "-",
+    clockTime: "-",
+    clockOffsetMs: 0,
+    currentCoordinator: "-",
+    isPrimary: false,
+    lastHeartbeat: "-",
+    error: "Unreachable"
+  };
+}
+
+router.get("/nodes", async (req, res) => {
+  const docker = await dockerControlAvailable();
+  const nodes = await Promise.all(CLUSTER_PEERS.map(async (peer) => {
     if (peer.nodeId === NODE_ID) {
-      nodes.push({
-        ...getLocalNodeInfo(),
-        url: peer.url
-      });
-    } else {
+      return { ...getLocalNodeInfo(), url: peer.url };
+    }
+    // A stopped container name does not resolve, and that lookup can stall the
+    // request long enough to mark a live container offline. Trust Docker first.
+    if (docker) {
       try {
-        const resp = await axios.get(`${peer.url}/api/distributed/health`, { timeout: 1000 });
-        nodes.push({
-          ...resp.data,
-          url: peer.url
-        });
-      } catch (err) {
-        nodes.push({
-          nodeId: peer.nodeId,
-          role: peer.role,
-          port: peer.port,
-          url: peer.url,
-          status: "OFFLINE",
-          currentClock: "-",
-          clockTime: "-",
-          clockOffsetMs: 0,
-          currentCoordinator: "-",
-          isPrimary: false,
-          lastHeartbeat: "-",
-          error: "Unreachable"
-        });
+        if (!(await containerIsRunning(peer.nodeId))) return offlineNode(peer);
+      } catch {
+        return offlineNode(peer);
       }
     }
-  }
+    try {
+      const resp = await axios.get(`${peer.url}/api/distributed/health`, { timeout: 2000 });
+      return { ...resp.data, url: peer.url };
+    } catch {
+      return offlineNode(peer);
+    }
+  }));
 
   res.json({
     currentNodeId: NODE_ID,
@@ -175,31 +182,53 @@ router.post("/concurrency-test", async (req, res) => {
 
 // GET /api/distributed/clocks - View distributed clocks of all nodes
 router.get("/clocks", async (req, res) => {
-  const clocks = [];
-  for (const peer of CLUSTER_PEERS) {
+  const docker = await dockerControlAvailable();
+  const clocks = await Promise.all(CLUSTER_PEERS.map(async (peer) => {
     if (peer.nodeId === NODE_ID) {
-      clocks.push({
+      return {
         nodeId: NODE_ID,
         role: NODE_ROLE,
         ...getLocalClock(),
         status: getSimulatedOffline() ? "OFFLINE" : "ONLINE"
-      });
-    } else {
+      };
+    }
+    if (docker) {
       try {
-        const resp = await axios.get(`${peer.url}/api/distributed/clock-probe`, { timeout: 1000 });
-        clocks.push(resp.data);
-      } catch (e) {
-        clocks.push({
+        if (!(await containerIsRunning(peer.nodeId))) {
+          return {
+            nodeId: peer.nodeId,
+            role: peer.role,
+            status: "OFFLINE",
+            distributedTimestamp: 0,
+            timeString: "-",
+            offsetMs: 0
+          };
+        }
+      } catch {
+        return {
           nodeId: peer.nodeId,
           role: peer.role,
           status: "OFFLINE",
           distributedTimestamp: 0,
           timeString: "-",
           offsetMs: 0
-        });
+        };
       }
     }
-  }
+    try {
+      const resp = await axios.get(`${peer.url}/api/distributed/clock-probe`, { timeout: 2000 });
+      return resp.data;
+    } catch {
+      return {
+        nodeId: peer.nodeId,
+        role: peer.role,
+        status: "OFFLINE",
+        distributedTimestamp: 0,
+        timeString: "-",
+        offsetMs: 0
+      };
+    }
+  }));
   res.json({
     coordinatorId: getCoordinator(),
     clocks

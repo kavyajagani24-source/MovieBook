@@ -97,6 +97,13 @@ const DistributedDashboard = () => {
 
       if (nodesRes.status === 'fulfilled') {
         setNodes(nodesRes.value.data.nodes || []);
+      } else {
+        setNodes([
+          { nodeId: 1, role: 'SERVER', port: 5000, status: 'OFFLINE', hostname: '-', clockTime: '-', clockOffsetMs: 0 },
+          { nodeId: 2, role: 'SERVER', port: 5001, status: 'OFFLINE', hostname: '-', clockTime: '-', clockOffsetMs: 0 },
+          { nodeId: 3, role: 'SERVER', port: 5002, status: 'OFFLINE', hostname: '-', clockTime: '-', clockOffsetMs: 0 },
+          { nodeId: 4, role: 'BACKUP', port: 5003, status: 'OFFLINE', hostname: '-', clockTime: '-', clockOffsetMs: 0, isPrimary: false }
+        ]);
       }
       if (clocksRes.status === 'fulfilled') {
         setClocks(clocksRes.value.data.clocks || []);
@@ -212,13 +219,17 @@ const DistributedDashboard = () => {
   };
 
   // 4. Simulate Server Failure / Failover
-  const handleToggleFailure = async () => {
+  const handleToggleFailure = async (nodeId = failoverTargetNode, stop?: boolean) => {
+    const target = nodes.find((node) => node.nodeId === nodeId);
+    const shouldStop = stop ?? target?.status !== 'OFFLINE';
     try {
-      const target = nodes.find((node) => node.nodeId === failoverTargetNode);
-      const stop = target?.status !== 'OFFLINE';
-      await distributedAPI.simulateFailure(failoverTargetNode, stop);
-      toast.info(stop ? `Container ${failoverTargetNode} stopped` : `Container ${failoverTargetNode} started`);
+      await distributedAPI.simulateFailure(nodeId, shouldStop);
+      toast.info(shouldStop ? `Container ${nodeId} stopped` : `Container ${nodeId} is starting`);
       fetchClusterData(true);
+      if (!shouldStop) {
+        setTimeout(() => fetchClusterData(true), 4000);
+        setTimeout(() => fetchClusterData(true), 9000);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to toggle failure');
     }
@@ -227,8 +238,8 @@ const DistributedDashboard = () => {
   // 7. Promote Backup Server to Primary
   const handlePromoteBackup = async () => {
     try {
-      const resp = await distributedAPI.promoteBackup(failoverTargetNode);
-      toast.success(resp.data.message || `Node ${failoverTargetNode} promoted to Primary!`);
+      const resp = await distributedAPI.promoteBackup(4);
+      toast.success(resp.data.message || 'Backup promoted to primary');
       fetchClusterData(true);
     } catch (err: any) {
       toast.error(err.message || 'Backup promotion failed');
@@ -242,7 +253,17 @@ const DistributedDashboard = () => {
       const hits = await probeLoadBalancer(Number(lbCount) || 9);
       setLbHits(hits);
       const served = hits.filter((hit) => hit.ok).length;
-      toast.success(`Load balancer placed ${served} of ${hits.length} requests on application containers.`);
+      const backupHits = hits.filter((hit) => hit.ok && hit.nodeId === 4).length;
+      const appHits = served - backupHits;
+      if (served === 0) {
+        toast.error('No container accepted the request. Start the backup, or start containers 1–3.');
+      } else {
+        toast.success(
+          backupHits > 0 && appHits === 0
+            ? `Failover: backup served all ${backupHits} requests. Containers 1–3 are stopped.`
+            : `Load balancer served ${served} of ${hits.length}. Containers 1–3: ${appHits}. Backup: ${backupHits}.`
+        );
+      }
     } catch (err: any) {
       toast.error(err.message || 'Load balancer probe failed');
     } finally {
@@ -436,6 +457,15 @@ const DistributedDashboard = () => {
                       </span>
                     </div>
                   </div>
+
+                  <Button
+                    size="sm"
+                    variant={isOffline ? 'default' : 'destructive'}
+                    className="mt-4 w-full"
+                    onClick={() => handleToggleFailure(node.nodeId, !isOffline)}
+                  >
+                    {isOffline ? `Start container ${node.nodeId}` : `Stop container ${node.nodeId}`}
+                  </Button>
 
                   <div className="mt-4 pt-3 border-t border-border/50 flex flex-wrap gap-1.5">
                     {isPrimary && (
@@ -759,7 +789,7 @@ const DistributedDashboard = () => {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={handleToggleFailure}
+                      onClick={() => handleToggleFailure()}
                       className="gap-2"
                     >
                       <AlertTriangle className="h-4 w-4" />
@@ -774,7 +804,7 @@ const DistributedDashboard = () => {
                       className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                       <ShieldCheck className="h-4 w-4" />
-                      Promote Node {failoverTargetNode} to Primary
+                      Promote backup to primary
                     </Button>
                   </div>
                 </div>

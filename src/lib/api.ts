@@ -28,7 +28,7 @@ export async function probeLoadBalancer(count: number) {
   for (let i = 1; i <= total; i++) {
     const started = Date.now();
     try {
-      const resp = await axios.get(`${LOAD_BALANCER_URL}/api/distributed/lb-hit`, { timeout: 4000 });
+      const resp = await axios.get(`${LOAD_BALANCER_URL}/api/distributed/lb-hit`, { timeout: 8000 });
       hits.push({ index: i, ok: true, ms: Date.now() - started, ...resp.data });
     } catch (err: any) {
       hits.push({
@@ -157,20 +157,29 @@ export const discountAPI = {
   delete: (offer_id: number) => api.delete(`/discounts/${offer_id}`),
 };
 
-const NODE_API_BASES = [5000, 5001, 5002, 5003].map((port) => `http://localhost:${port}/api`);
+const NODE_API_BASES = [5099, 5000, 5001, 5002, 5003].map((port) => `http://localhost:${port}/api`);
 
-/** Use whichever application container is still running. */
-async function anyNode(call: (client: ReturnType<typeof axios.create>) => Promise<any>, timeout = 4000) {
-  let lastError: unknown;
-  for (const baseURL of NODE_API_BASES) {
-    try {
-      return await call(axios.create({ baseURL, timeout }));
-    } catch (err: any) {
-      lastError = err;
-      if (err.response) throw err;
-    }
+/** Talk to a container that is still running. Port 5099 is the controller and stays up. */
+async function anyNode(call: (client: ReturnType<typeof axios.create>) => Promise<any>, timeout = 8000) {
+  const [controller, ...containers] = NODE_API_BASES;
+  try {
+    await axios.get(`${controller}/distributed/health`, { timeout: 800 });
+    return call(axios.create({ baseURL: controller, timeout }));
+  } catch {
+    // Controller is down. Use whichever application container still answers.
   }
-  throw lastError;
+  let baseURL: string;
+  try {
+    baseURL = await Promise.any(
+      containers.map(async (base) => {
+        await axios.get(`${base}/distributed/health`, { timeout: 1200 });
+        return base;
+      })
+    );
+  } catch {
+    throw new Error('Every container is stopped. Press Start on a container card.');
+  }
+  return call(axios.create({ baseURL, timeout }));
 }
 
 // Distributed Systems APIs
@@ -187,7 +196,8 @@ export const distributedAPI = {
   getReplicationStatus: () => anyNode((client) => client.get('/distributed/replication/status')),
   simulateFailure: (nodeId?: number, offline?: boolean) =>
     anyNode((client) => client.post('/distributed/simulate-failure', { nodeId, offline }), 30000),
-  promoteBackup: (nodeId?: number) => api.post(`/distributed/promote-backup`, nodeId ? { nodeId } : {}),
+  promoteBackup: (nodeId?: number) =>
+    anyNode((client) => client.post('/distributed/promote-backup', nodeId ? { nodeId } : {})),
   writeConsistency: (data: { key: string; value: string; mode: 'strong' | 'eventual' }) =>
     api.post('/distributed/consistency/write', data),
   compareConsistency: (key: string) => api.post('/distributed/consistency/compare', { key }),

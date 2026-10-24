@@ -130,7 +130,20 @@ export async function saveToFaultToleranceDb({
 /**
  * Get current replication health and counts
  */
+async function backupIsPromoted() {
+  if (NODE_ID === 4) return getIsBackupPromoted();
+  const backupPeer = CLUSTER_PEERS.find((peer) => peer.nodeId === 4);
+  if (!backupPeer) return false;
+  try {
+    const resp = await axios.get(`${backupPeer.url}/api/distributed/status`, { timeout: 1500 });
+    return Boolean(resp.data?.isBackupPromoted);
+  } catch {
+    return false;
+  }
+}
+
 export async function getReplicationStatus() {
+  const promoted = await backupIsPromoted();
   try {
     const [countRows] = await ftPool.promise().query('SELECT COUNT(*)::int AS "totalReplicated" FROM replicated_bookings');
     const [recentRows] = await ftPool.promise().query(
@@ -146,7 +159,7 @@ export async function getReplicationStatus() {
       totalReplicatedBookings: countRows[0]?.totalReplicated || 0,
       recentReplicatedBookings: recentRows,
       recentLogs: logRows,
-      isBackupPromoted: getIsBackupPromoted()
+      isBackupPromoted: promoted
     };
   } catch (err) {
     return {
@@ -156,7 +169,7 @@ export async function getReplicationStatus() {
       totalReplicatedBookings: 0,
       recentReplicatedBookings: [],
       recentLogs: [],
-      isBackupPromoted: getIsBackupPromoted()
+      isBackupPromoted: promoted
     };
   }
 }
