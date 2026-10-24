@@ -5,9 +5,7 @@ import {
   CLUSTER_PEERS,
   getLocalClock,
   setLocalClockOffset,
-  getLocalClockOffset,
-  getCoordinator,
-  setCoordinator
+  getCoordinator
 } from "./nodeRegistry.js";
 
 /**
@@ -21,10 +19,9 @@ import {
  *      adjustment_i = average_diff - relative_diff_i
  * 6. Each node adds the adjustment to its local clock offset.
  */
-export async function runBerkeleySynchronization(initiatorNodeId = NODE_ID) {
-  const coordinatorId = initiatorNodeId;
-  setCoordinator(coordinatorId);
-  console.log(`[Berkeley] Clock sync initiated by Coordinator Node ${coordinatorId}`);
+export async function runBerkeleySynchronization() {
+  const coordinatorId = getCoordinator();
+  console.log(`[Berkeley] Clock sync uses coordinator node ${coordinatorId}`);
 
   // Only active application servers participate in clock synchronization (Nodes 1, 2, 3)
   const participatingServers = CLUSTER_PEERS.filter(p => p.role === "SERVER" && p.nodeId <= 3);

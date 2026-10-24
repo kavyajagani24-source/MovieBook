@@ -36,8 +36,13 @@ export async function executeRpcMethod(method, params = {}, clientIp = "127.0.0.
         const seatNo = params.seatNo || params.seat || "C1";
         // Check if ticket exists with this seat for this show
         const [rows] = await db.promise().query(
-          "SELECT * FROM `Tickets` WHERE show_id = ? AND (seat_no = ? OR seat_no = ?)",
-          [showId, seatNo, seatNo.replace(/\D/g, "")]
+          `SELECT * FROM "Tickets"
+           WHERE show_id = ?
+             AND (
+               COALESCE(seat_label, '') = ?
+               OR (COALESCE(seat_label, '') = '' AND seat_no::text = ?::text)
+             )`,
+          [showId, String(seatNo), String(seatNo).replace(/\D/g, "") || String(seatNo)]
         );
         result = {
           showId,

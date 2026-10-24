@@ -13,6 +13,27 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET /api/movies/:m_id/shows — must be registered before /:m_id is not required,
+// but a two-segment path never matches /:m_id. Kept here so the seat flow can load real shows.
+router.get("/:m_id/shows", async (req, res) => {
+  const { m_id } = req.params;
+  try {
+    const [rows] = await db.promise().query(
+      `SELECT s.*, m.m_name, th.t_name, th.location
+       FROM \`Shows\` s
+       LEFT JOIN \`Movie\` m ON s.m_id = m.m_id
+       LEFT JOIN \`Theatre\` th ON s.t_id = th.t_id
+       WHERE s.m_id = ?
+       ORDER BY s.st_time`,
+      [m_id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch shows" });
+  }
+});
+
 // GET /api/movies/:m_id
 router.get("/:m_id", async (req, res) => {
   const { m_id } = req.params;

@@ -9,6 +9,7 @@ import {
 } from "../distributed/nodeRegistry.js";
 import { replicateBookingToBackup } from "../distributed/replicationService.js";
 import { logDistributedRequest } from "../distributed/requestLogger.js";
+import { ensureSeatLabelColumn } from "./tickets.js";
 
 const router = express.Router();
 
@@ -48,6 +49,7 @@ router.post("/", async (req, res) => {
   if (!c_id) return res.status(400).json({ error: 'c_id is required' });
 
   const conn = await db.promise().getConnection();
+  const hasSeatLabel = await ensureSeatLabelColumn();
   try {
     // 3. Begin Transaction with Concurrency Isolation
     await conn.beginTransaction();
@@ -70,8 +72,14 @@ router.post("/", async (req, res) => {
 
       // 4. Concurrency Protection: Lock seat for update to prevent race conditions / double bookings
       const [existingSeat] = await conn.query(
-        "SELECT ticket_no FROM `Tickets` WHERE show_id = ? AND (seat_no = ? OR seat_no = ?) FOR UPDATE",
-        [show_id, rawSeat, seatValue]
+        `SELECT ticket_no FROM \`Tickets\`
+         WHERE show_id = ?
+           AND (
+             COALESCE(seat_label, '') = ?
+             OR (COALESCE(seat_label, '') = '' AND seat_no::text = ?::text)
+           )
+         FOR UPDATE`,
+        [show_id, String(rawSeat), String(seatValue)]
       );
 
       if (existingSeat.length > 0) {
@@ -83,11 +91,17 @@ router.post("/", async (req, res) => {
         });
       }
 
-      // 5. Insert Ticket atomically
-      const [ticketRes] = await conn.query(
-        "INSERT INTO `Tickets` (show_id, show_date, show_time, seat_no, hall_no, t_id, price, admin_id) VALUES (?,?,?,?,?,?,?,?)",
-        [show_id, show_date || new Date().toISOString().split('T')[0], show_time || '18:00', seatValue, hall_no || 1, t_id || 1, seatPrice, admin_id || null]
-      );
+      // 5. Insert Ticket atomically. seat_no stays numeric for older rows; seat_label keeps "C5".
+      const seatLabel = String(rawSeat).slice(0, 16);
+      const [ticketRes] = hasSeatLabel
+        ? await conn.query(
+            "INSERT INTO `Tickets` (show_id, show_date, show_time, seat_no, seat_label, hall_no, t_id, price, admin_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            [show_id, show_date || new Date().toISOString().split('T')[0], show_time || '18:00', seatValue, seatLabel, hall_no || 1, t_id || 1, seatPrice, admin_id || null]
+          )
+        : await conn.query(
+            "INSERT INTO `Tickets` (show_id, show_date, show_time, seat_no, hall_no, t_id, price, admin_id) VALUES (?,?,?,?,?,?,?,?)",
+            [show_id, show_date || new Date().toISOString().split('T')[0], show_time || '18:00', seatValue, hall_no || 1, t_id || 1, seatPrice, admin_id || null]
+          );
 
       const ticketNo = ticketRes.insertId;
       createdTickets.push(ticketNo);

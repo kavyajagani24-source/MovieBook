@@ -63,8 +63,14 @@ async function attemptBookingTransaction(reqNumber, showId, rawSeat, seatNumeric
 
     // 2. Concurrency Control: Check if seat is booked for this show with pessimistic lock
     const [existingTickets] = await conn.query(
-      "SELECT ticket_no FROM `Tickets` WHERE show_id = ? AND (seat_no = ? OR seat_no = ?) FOR UPDATE",
-      [showId, rawSeat, seatNumeric]
+      `SELECT ticket_no FROM "Tickets"
+       WHERE show_id = ?
+         AND (
+           COALESCE(seat_label, '') = ?
+           OR (COALESCE(seat_label, '') = '' AND seat_no::text = ?::text)
+         )
+       FOR UPDATE`,
+      [showId, rawSeat, String(seatNumeric)]
     );
 
     if (existingTickets.length > 0) {
@@ -80,8 +86,8 @@ async function attemptBookingTransaction(reqNumber, showId, rawSeat, seatNumeric
 
     // 3. Atomically Insert Ticket
     const [ticketRes] = await conn.query(
-      "INSERT INTO `Tickets` (show_id, show_date, show_time, seat_no, hall_no, t_id, price, admin_id) VALUES (?, CURRENT_DATE(), '18:00', ?, 1, 1, 250.00, 1)",
-      [showId, seatNumeric]
+      "INSERT INTO `Tickets` (show_id, show_date, show_time, seat_no, seat_label, hall_no, t_id, price, admin_id) VALUES (?, CURRENT_DATE, '18:00', ?, ?, 1, 1, 250.00, 1)",
+      [showId, seatNumeric, rawSeat.slice(0, 16)]
     );
     const ticketNo = ticketRes.insertId;
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Movie, Show, Theatre } from '@/types';
-import { movieAPI, showsAPI, BACKEND_BASE } from '@/lib/api';
+import { movieAPI, showsAPI, posterSrc } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
@@ -30,17 +30,7 @@ const MovieDetails = () => {
       setMovie(response.data);
     } catch (error) {
       toast.error('Failed to fetch movie details');
-      // Mock data for demo
-      setMovie({
-        m_id: Number(id),
-        m_name: 'The Dark Cinema',
-        release_date: '2024-01-15',
-        director: 'Christopher Nolan',
-        actors: 'Christian Bale, Heath Ledger, Aaron Eckhart',
-        genre: 'Action',
-        rating: '9.0',
-        description: 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.',
-      });
+      setMovie(null);
     } finally {
       setIsLoading(false);
     }
@@ -51,46 +41,23 @@ const MovieDetails = () => {
       const response = await showsAPI.getByMovie(Number(id));
       setShows(response.data);
     } catch (error) {
-      // Mock shows for demo
-      setShows([
-        {
-          show_id: 1,
-          st_time: '10:00',
-          end_time: '12:30',
-          language: 'English',
-          duration_weeks: 4,
-          t_id: 1,
-          show_date: new Date().toISOString().split('T')[0],
-        },
-        {
-          show_id: 2,
-          st_time: '14:00',
-          end_time: '16:30',
-          language: 'English',
-          duration_weeks: 4,
-          t_id: 1,
-          show_date: new Date().toISOString().split('T')[0],
-        },
-        {
-          show_id: 3,
-          st_time: '18:00',
-          end_time: '20:30',
-          language: 'English',
-          duration_weeks: 4,
-          t_id: 2,
-          show_date: new Date().toISOString().split('T')[0],
-        },
-      ]);
+      toast.error('Failed to fetch shows');
+      setShows([]);
     }
   };
 
-  const handleBookShow = (showId: number) => {
+  const handleBookShow = (show: Show) => {
     if (!user) {
       toast.error('Please login to book tickets');
       navigate('/auth');
       return;
     }
-    navigate(`/book/${showId}`);
+    navigate(`/book/${show.show_id}`, {
+      state: {
+        show,
+        movieName: movie?.m_name,
+      },
+    });
   };
 
   if (isLoading) {
@@ -127,9 +94,7 @@ const MovieDetails = () => {
               <div className="aspect-[2/3] bg-muted flex items-center justify-center">
                 {
                   (() => {
-                    const imgSrc = movie.poster_url
-                      ? (movie.poster_url.startsWith('http') ? movie.poster_url : `${BACKEND_BASE}${movie.poster_url}`)
-                      : undefined;
+                    const imgSrc = posterSrc(movie.poster_url);
                     return imgSrc ? (
                       <img src={imgSrc} alt={movie.m_name} className="w-full h-full object-cover" />
                     ) : (
@@ -213,7 +178,7 @@ const MovieDetails = () => {
                     
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="h-4 w-4" />
-                      <span>Theatre {show.t_id}</span>
+                      <span>{(show as Show & { t_name?: string }).t_name || `Theatre ${show.t_id}`}</span>
                     </div>
 
                     <div className="flex items-center gap-2 text-sm">
@@ -222,7 +187,7 @@ const MovieDetails = () => {
 
                     <Button 
                       className="w-full"
-                      onClick={() => handleBookShow(show.show_id)}
+                      onClick={() => handleBookShow(show)}
                     >
                       Select Seats
                     </Button>

@@ -40,45 +40,23 @@ const MyBookings = () => {
     if (!silent) setIsLoading(true);
     else setIsRefreshing(true);
 
+    const customerId = (user as Customer | null)?.c_id;
+    if (!customerId) {
+      setBookings([]);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
     try {
-      const response = await bookingAPI.getByCustomer((user as Customer).c_id);
-      setBookings(response.data);
+      const response = await bookingAPI.getByCustomer(customerId);
+      setBookings(Array.isArray(response.data) ? response.data : []);
       if (silent) toast.success('Bookings updated');
     } catch (error) {
       if (!silent) {
         toast.error('Failed to fetch bookings');
       }
-      // Mock data for demo
-      setBookings([
-        {
-          booking_id: 1,
-          booking_date: '2024-01-15',
-          ticket_no: 1001,
-          c_id: 1,
-          movie: {
-            m_id: 1,
-            m_name: 'The Dark Cinema',
-            release_date: '2024-01-15',
-            director: 'Christopher Nolan',
-            actors: 'Christian Bale',
-          },
-          theatre: {
-            t_id: 1,
-            t_name: 'PVR Cinemas',
-            location: 'Downtown Plaza',
-          },
-          ticket: {
-            ticket_no: 1001,
-            show_id: 1,
-            show_date: '2024-01-20',
-            show_time: '18:00',
-            seat_no: 15,
-            hall_no: 2,
-            t_id: 1,
-            price: 250,
-          },
-        },
-      ]);
+      setBookings([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -132,7 +110,7 @@ const MyBookings = () => {
                     <div className="flex-1 space-y-4">
                       <div>
                         <h3 className="text-xl font-semibold mb-1">
-                          {booking.movie?.m_name || 'Movie Name'}
+                          {booking.movie?.m_name || 'Booked ticket'}
                         </h3>
                         <p className="text-sm text-muted-foreground">
                           Booking ID: #{booking.booking_id}
@@ -157,14 +135,14 @@ const MyBookings = () => {
                         
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <Ticket className="h-4 w-4" />
-                          <span>Seat {booking.ticket?.seat_no || 'N/A'}, Hall {booking.ticket?.hall_no || 'N/A'}</span>
+                          <span>Seat {booking.ticket?.seat_no ?? 'N/A'}, Hall {booking.ticket?.hall_no || 'N/A'}</span>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">Amount Paid:</span>
                         <span className="text-lg font-bold text-primary">
-                          ₹{booking.ticket?.price || 0}
+                          ₹{booking.ticket?.price || (booking as BookingWithDetails & { total_price?: number }).total_price || 0}
                         </span>
                       </div>
                     </div>

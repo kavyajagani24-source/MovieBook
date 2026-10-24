@@ -1,6 +1,6 @@
 import { Movie } from '@/types';
 import { Card } from '@/components/ui/card';
-import { BACKEND_BASE } from '@/lib/api';
+import { posterSrc } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, Film, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -14,9 +14,7 @@ const MovieCard = ({ movie }: MovieCardProps) => {
   const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
 
-  const imgSrc = movie.poster_url
-    ? (movie.poster_url.startsWith('http') ? movie.poster_url : `${BACKEND_BASE}${movie.poster_url}`)
-    : undefined;
+  const imgSrc = posterSrc(movie.poster_url);
 
   return (
     <Card className="group overflow-hidden border border-gray-200 bg-card hover:shadow-lg transition-all duration-300 cursor-pointer rounded-lg">

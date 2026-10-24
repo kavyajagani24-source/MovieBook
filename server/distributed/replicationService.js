@@ -95,13 +95,13 @@ export async function saveToFaultToleranceDb({
 
     // 1. Insert or update into replicated_bookings
     await ftPool.promise().query(
-      `INSERT INTO \`replicated_bookings\` 
+      `INSERT INTO replicated_bookings
        (source_booking_id, customer_id, show_id, ticket_no, seat_data, total_price, source_node_id, version, event_type, event_timestamp)
        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'BOOKING_CREATED', ?)
-       ON DUPLICATE KEY UPDATE 
-         version = version + 1,
-         seat_data = VALUES(seat_data),
-         total_price = VALUES(total_price),
+       ON CONFLICT (source_booking_id) DO UPDATE SET
+         version = replicated_bookings.version + 1,
+         seat_data = EXCLUDED.seat_data,
+         total_price = EXCLUDED.total_price,
          replicated_at = CURRENT_TIMESTAMP`,
       [bookingId, customerId, showId, ticketNo, seatString, totalPrice, sourceNodeId, nowStr]
     );
@@ -132,7 +132,7 @@ export async function saveToFaultToleranceDb({
  */
 export async function getReplicationStatus() {
   try {
-    const [countRows] = await ftPool.promise().query("SELECT COUNT(*) AS totalReplicated FROM `replicated_bookings`");
+    const [countRows] = await ftPool.promise().query('SELECT COUNT(*)::int AS "totalReplicated" FROM replicated_bookings');
     const [recentRows] = await ftPool.promise().query(
       "SELECT * FROM `replicated_bookings` ORDER BY replicated_at DESC LIMIT 15"
     );
@@ -141,7 +141,7 @@ export async function getReplicationStatus() {
     );
 
     return {
-      faultToleranceDb: "moviebooking_fault_tolerance",
+      faultToleranceDb: process.env.DB_NAME || "postgres",
       status: "ACTIVE",
       totalReplicatedBookings: countRows[0]?.totalReplicated || 0,
       recentReplicatedBookings: recentRows,
@@ -150,7 +150,7 @@ export async function getReplicationStatus() {
     };
   } catch (err) {
     return {
-      faultToleranceDb: "moviebooking_fault_tolerance",
+      faultToleranceDb: process.env.DB_NAME || "postgres",
       status: "DEGRADED",
       error: err.message,
       totalReplicatedBookings: 0,

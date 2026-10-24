@@ -13,6 +13,7 @@ import {
   getSimulatedOffline,
   getCoordinator,
   setCoordinator,
+  getIsPrimary,
   setBackupPromoted,
   getIsBackupPromoted
 } from "../distributed/nodeRegistry.js";
@@ -20,12 +21,24 @@ import { executeRpcMethod } from "../distributed/rpcHandler.js";
 import { getRecentRequestLogs, logDistributedRequest } from "../distributed/requestLogger.js";
 import { runConcurrentBookingTest } from "../distributed/concurrencyManager.js";
 import { runBerkeleySynchronization } from "../distributed/berkeleyClock.js";
+import {
+  dockerControlAvailable,
+  containerIsRunning,
+  setContainerRunning
+} from "../distributed/containerControl.js";
 import { runBullyElection, runRingElection } from "../distributed/elections.js";
 import {
   replicateBookingToBackup,
   saveToFaultToleranceDb,
   getReplicationStatus
 } from "../distributed/replicationService.js";
+import {
+  runConsistencyWrite,
+  compareConsistency,
+  readLocalConsistency,
+  writeReplica
+} from "../distributed/consistencyService.js";
+import os from "os";
 
 const router = express.Router();
 
@@ -98,7 +111,7 @@ router.get("/status", (req, res) => {
     port: PORT,
     status: getSimulatedOffline() ? "OFFLINE" : "ONLINE",
     currentCoordinator: getCoordinator(),
-    isPrimary: (NODE_ID === 4 && getIsBackupPromoted()) ? true : (NODE_ID === 1 || NODE_ID === 2),
+    isPrimary: (NODE_ID === 4 && getIsBackupPromoted()) ? true : getIsPrimary(),
     isBackupPromoted: getIsBackupPromoted(),
     clock: getLocalClock()
   });
@@ -292,10 +305,36 @@ router.get("/replication/status", async (req, res) => {
   res.json(status);
 });
 
-// POST /api/distributed/simulate-failure - Toggle simulated hardware/network crash for any node
+// POST /api/distributed/simulate-failure - Stop or start the target Docker container.
 router.post("/simulate-failure", async (req, res) => {
   const { nodeId, offline } = req.body;
   const targetId = nodeId ? Number(nodeId) : NODE_ID;
+
+  if (await dockerControlAvailable()) {
+    const shouldStop = offline !== undefined ? Boolean(offline) : await containerIsRunning(targetId);
+    console.log(`[Failover] ${shouldStop ? "Stopping" : "Starting"} container for node ${targetId}`);
+
+    if (targetId === NODE_ID && shouldStop) {
+      res.json({ nodeId: targetId, status: "OFFLINE", container: "stopped" });
+      setTimeout(() => {
+        setContainerRunning(targetId, false).catch((err) => {
+          console.error(`[Failover] Failed to stop this container: ${err.message}`);
+        });
+      }, 400);
+      return;
+    }
+
+    try {
+      await setContainerRunning(targetId, !shouldStop);
+      return res.json({
+        nodeId: targetId,
+        status: shouldStop ? "OFFLINE" : "ONLINE",
+        container: shouldStop ? "stopped" : "started"
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
 
   if (targetId === NODE_ID) {
     const isOffline = offline !== undefined ? Boolean(offline) : !getSimulatedOffline();
@@ -317,6 +356,72 @@ router.post("/simulate-failure", async (req, res) => {
     res.json(resp.data);
   } catch (err) {
     res.status(500).json({ error: `Failed to contact Node ${targetId}: ${err.message}` });
+  }
+});
+
+// GET /api/distributed/lb-hit - Identity of the container that received this request.
+// Returns 503 while this container is simulated offline so Nginx can try the next upstream.
+router.get("/lb-hit", (req, res) => {
+  const body = {
+    nodeId: NODE_ID,
+    role: NODE_ROLE,
+    hostname: os.hostname(),
+    port: Number(process.env.PUBLIC_PORT || PORT),
+    runtime: process.env.RUNTIME || "process",
+    status: getSimulatedOffline() ? "OFFLINE" : "ONLINE",
+    servedAt: new Date().toISOString()
+  };
+  if (getSimulatedOffline()) {
+    return res.status(503).json(body);
+  }
+  res.json(body);
+});
+
+// -------------------------------------------------------------
+// 7. Data consistency (primary ledger + backup replica)
+// -------------------------------------------------------------
+
+router.post("/consistency/write", async (req, res) => {
+  try {
+    const { key, value, mode } = req.body || {};
+    const result = await runConsistencyWrite({ key, value, mode });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/consistency/read", async (req, res) => {
+  try {
+    const key = String(req.query.key || "");
+    if (!key) return res.status(400).json({ error: "Missing key" });
+    res.json(await readLocalConsistency(key));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/consistency/replicate", async (req, res) => {
+  try {
+    const { key, value, version, writtenByNode } = req.body || {};
+    const saved = await writeReplica({
+      key,
+      value,
+      version: Number(version),
+      writtenByNode: Number(writtenByNode)
+    });
+    res.status(201).json(saved);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/consistency/compare", async (req, res) => {
+  try {
+    const { key } = req.body || {};
+    res.json(await compareConsistency(key));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

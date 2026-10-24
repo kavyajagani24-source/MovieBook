@@ -20,6 +20,7 @@ import { fileURLToPath } from "url";
 
 import distributedRouter from "./routes/distributed.js";
 import { NODE_ID, NODE_ROLE, PORT } from "./distributed/nodeRegistry.js";
+import { initDatabases } from "./scripts/initFtDb.js";
 
 const app = express();
 app.use(cors());
@@ -49,6 +50,14 @@ app.use('/api/checkout', checkoutRouter);
 app.use('/api/distributed', distributedRouter);
 
 const serverPort = process.env.PORT || PORT || 5000;
-app.listen(serverPort, () => {
-  console.log(`✅ [Node ${NODE_ID} - ${NODE_ROLE}] Server running on port ${serverPort}`);
-});
+initDatabases()
+  .then(() => {
+    app.listen(serverPort, "0.0.0.0", () => {
+      console.log(`✅ [Node ${NODE_ID} - ${NODE_ROLE}] Server running on 0.0.0.0:${serverPort}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Postgres startup failed:", err.message);
+    console.error("Set DB_PASSWORD in server/.env to the password for user postgres in pgAdmin, then start again.");
+    process.exit(1);
+  });

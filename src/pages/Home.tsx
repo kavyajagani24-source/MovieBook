@@ -34,45 +34,13 @@ const Home = () => {
     try {
       setIsLoading(true);
       const response = await movieAPI.getAll();
-      setMovies(response.data);
-      setFilteredMovies(response.data);
+      const catalog = response.data.filter((movie: Movie) => movie.poster_url);
+      setMovies(catalog);
+      setFilteredMovies(catalog);
     } catch (error) {
       toast.error('Failed to fetch movies');
-      // Use mock data for demo
-      const mockMovies: Movie[] = [
-        {
-          m_id: 1,
-          m_name: 'The Dark Cinema',
-          release_date: '2024-01-15',
-          director: 'Christopher Nolan',
-          actors: 'Christian Bale, Heath Ledger',
-          genre: 'Action',
-          rating: '9.0',
-          description: 'A thrilling action movie',
-        },
-        {
-          m_id: 2,
-          m_name: 'Romance in Paris',
-          release_date: '2024-02-20',
-          director: 'Sofia Coppola',
-          actors: 'Emma Stone, Ryan Gosling',
-          genre: 'Romance',
-          rating: '8.5',
-          description: 'A beautiful love story',
-        },
-        {
-          m_id: 3,
-          m_name: 'Cosmic Journey',
-          release_date: '2024-03-10',
-          director: 'Denis Villeneuve',
-          actors: 'Timothée Chalamet, Zendaya',
-          genre: 'Sci-Fi',
-          rating: '8.8',
-          description: 'An epic space adventure',
-        },
-      ];
-      setMovies(mockMovies);
-      setFilteredMovies(mockMovies);
+      setMovies([]);
+      setFilteredMovies([]);
     } finally {
       setIsLoading(false);
     }

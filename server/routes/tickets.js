@@ -2,6 +2,37 @@ import express from "express";
 import db from "../config/db.js";
 const router = express.Router();
 
+let seatLabelReady = false;
+
+/** Keep the row+number label (C5) beside the numeric seat_no column. */
+export async function ensureSeatLabelColumn() {
+  if (seatLabelReady) return true;
+  try {
+    await db.promise().query('ALTER TABLE "Tickets" ADD COLUMN IF NOT EXISTS seat_label VARCHAR(16)');
+    seatLabelReady = true;
+    return true;
+  } catch (err) {
+    console.warn("seat_label column unavailable:", err.message);
+    return false;
+  }
+}
+
+// GET /api/tickets/show/:show_id — seats already booked for a show
+router.get("/show/:show_id", async (req, res) => {
+  const { show_id } = req.params;
+  try {
+    const hasLabel = await ensureSeatLabelColumn();
+    const sql = hasLabel
+      ? "SELECT ticket_no, show_id, seat_no, seat_label, show_date, show_time, hall_no, price FROM `Tickets` WHERE show_id = ?"
+      : "SELECT ticket_no, show_id, seat_no, show_date, show_time, hall_no, price FROM `Tickets` WHERE show_id = ?";
+    const [rows] = await db.promise().query(sql, [show_id]);
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/tickets - fetch all tickets
 router.get("/", async (req, res) => {
   try {

@@ -1,3 +1,4 @@
+import os from "os";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -11,8 +12,8 @@ let localClockOffsetMs = Number(process.env.CLOCK_OFFSET_MS || (NODE_ID === 1 ? 
 
 // Node state flags
 let isSimulatedOffline = false;
-let currentCoordinatorId = 3; // Server 3 by default (highest ID active node)
-let isPrimaryNode = (NODE_ID === 1 || NODE_ID === 2); // default primary is Node 1 or 2
+let currentCoordinatorId = 1;
+let isPrimaryNode = NODE_ID === 1;
 let isBackupPromoted = false;
 
 // Peer topology
@@ -85,7 +86,10 @@ export function getLocalNodeInfo() {
   return {
     nodeId: NODE_ID,
     role: (NODE_ID === 4 && isBackupPromoted) ? "PRIMARY" : NODE_ROLE,
-    port: PORT,
+    port: Number(process.env.PUBLIC_PORT || PORT),
+    listenPort: PORT,
+    hostname: os.hostname(),
+    runtime: process.env.RUNTIME || "process",
     status: isSimulatedOffline ? "OFFLINE" : "ONLINE",
     currentClock: clock.isoString,
     clockTime: clock.timeString,

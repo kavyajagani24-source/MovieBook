@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { ticketsAPI } from '@/lib/api';
 
 interface Seat {
   row: string;
@@ -18,6 +19,7 @@ interface Seat {
 const SeatSelection = () => {
   const { showId } = useParams<{ showId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<Seat[]>([]);
@@ -29,9 +31,9 @@ const SeatSelection = () => {
       return;
     }
     initializeSeats();
-  }, []);
+  }, [showId]);
 
-  const initializeSeats = () => {
+  const initializeSeats = async () => {
     // Build a fixed seating layout that matches the requested map.
     // Rows: C, D, F, H, I, J, K, L, M
     // Use `null` in the seat arrays to indicate a gap (no seat), so spacing matches the photo.
@@ -51,10 +53,19 @@ const SeatSelection = () => {
 
     const generatedSeats: Seat[] = [];
 
-    // deterministic occupied pattern: pick a few positions to show as booked (grey)
-    const occupiedSet = new Set<string>([
-      'C5','C6','D10','F6','J2','J3','L4'
-    ]);
+    const occupiedSet = new Set<string>();
+    if (showId) {
+      try {
+        const response = await ticketsAPI.getByShow(Number(showId));
+        const booked = Array.isArray(response.data) ? response.data : [];
+        booked.forEach((ticket: { seat_label?: string; seat_no?: string | number }) => {
+          const label = String(ticket.seat_label || ticket.seat_no || '').trim();
+          if (label) occupiedSet.add(label);
+        });
+      } catch (error) {
+        console.error('Failed to load booked seats', error);
+      }
+    }
 
     layoutRows.forEach((r) => {
       r.numbers.forEach((num) => {
@@ -99,7 +110,9 @@ const SeatSelection = () => {
     navigate(`/checkout/${showId}`, { 
       state: { 
         selectedSeats,
-        totalAmount: selectedSeats.reduce((sum, seat) => sum + seat.price, 0)
+        totalAmount: selectedSeats.reduce((sum, seat) => sum + seat.price, 0),
+        show: location.state?.show,
+        movieName: location.state?.movieName,
       } 
     });
   };

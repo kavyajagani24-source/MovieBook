@@ -1,150 +1,104 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import db from "../config/db.js";
-import ftPool from "../config/ftDb.js";
+import { pool } from "../config/pgPool.js";
 import dotenv from "dotenv";
 dotenv.config();
 
-export async function initDatabases() {
-  console.log("🛠️ Initializing Distributed Systems & Fault-Tolerance Databases...");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-  // 1. Ensure moviebooking_fault_tolerance database exists
-  const [dbCreateRes] = await db.promise().query(
-    `CREATE DATABASE IF NOT EXISTS \`${process.env.FT_DB_NAME || "moviebooking_fault_tolerance"}\`;`
-  );
-  console.log("✅ Fault-Tolerance Database checked/created.");
+const POSTER_MOVIES = [
+  { m_name: "Interstellar", poster: "interstellar.jpg", director: "Christopher Nolan", actors: "Matthew McConaughey, Anne Hathaway", genre: "Sci-Fi", rating: "8.7", release_date: "2014-11-07", description: "Explorers travel through a wormhole in search of a new home for humanity." },
+  { m_name: "Inception", poster: "inception.jpg", director: "Christopher Nolan", actors: "Leonardo DiCaprio, Joseph Gordon-Levitt", genre: "Sci-Fi", rating: "8.8", release_date: "2010-07-16", description: "A thief enters dreams to plant an idea." },
+  { m_name: "Batman", poster: "batman.jpg", director: "Tim Burton", actors: "Michael Keaton, Jack Nicholson", genre: "Action", rating: "7.5", release_date: "1989-06-23", description: "Batman faces the Joker in Gotham City." },
+  { m_name: "The Batman", poster: "MV5BMmU5NGJlMzAtMGNmOC00YjJjLTgyMzUtNjAyYmE4Njg5YWMyXkEyXkFqcGc@._V1_.jpg", director: "Matt Reeves", actors: "Robert Pattinson, Zoe Kravitz", genre: "Action", rating: "7.8", release_date: "2022-03-04", description: "Batman uncovers corruption in Gotham while hunting the Riddler." },
+  { m_name: "Joker", poster: "joker.jpg", director: "Todd Phillips", actors: "Joaquin Phoenix, Robert De Niro", genre: "Drama", rating: "8.4", release_date: "2019-10-04", description: "A failed comedian descends into madness in Gotham." },
+  { m_name: "Spider-Man", poster: "6letmpQOO-L.jpg", director: "Sam Raimi", actors: "Tobey Maguire, Kirsten Dunst", genre: "Action", rating: "7.4", release_date: "2002-05-03", description: "Peter Parker becomes Spider-Man." },
+  { m_name: "Doctor Strange", poster: "doctor.jpg", director: "Scott Derrickson", actors: "Benedict Cumberbatch, Chiwetel Ejiofor", genre: "Action", rating: "7.5", release_date: "2016-11-04", description: "A surgeon learns the mystic arts." },
+  { m_name: "Avengers", poster: "avengers.jpg", director: "Joss Whedon", actors: "Robert Downey Jr., Chris Evans", genre: "Action", rating: "8.0", release_date: "2012-05-04", description: "Earth's heroes assemble to stop an alien invasion." },
+  { m_name: "Black Panther", poster: "blackpanther.jpg", director: "Ryan Coogler", actors: "Chadwick Boseman, Michael B. Jordan", genre: "Action", rating: "7.3", release_date: "2018-02-16", description: "T'Challa returns home to Wakanda to take the throne." },
+  { m_name: "Titanic", poster: "titanic.jpg", director: "James Cameron", actors: "Leonardo DiCaprio, Kate Winslet", genre: "Romance", rating: "7.9", release_date: "1997-12-19", description: "A love story aboard the ill-fated ocean liner." },
+  { m_name: "Frozen", poster: "frozen.jpg", director: "Chris Buck, Jennifer Lee", actors: "Kristen Bell, Idina Menzel", genre: "Animation", rating: "7.4", release_date: "2013-11-27", description: "Anna sets out to find her sister Elsa." },
+  { m_name: "Frozen II", poster: "p_frozen2_19644_4c4b423d.jpeg", director: "Chris Buck, Jennifer Lee", actors: "Kristen Bell, Idina Menzel", genre: "Animation", rating: "6.8", release_date: "2019-11-22", description: "Elsa and Anna travel to an enchanted forest." }
+];
 
-  // 2. Initialize tables in moviebooking (Main DB) for distributed metadata
-  await db.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`distributed_booking_metadata\` (
-      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-      \`booking_id\` INT NOT NULL,
-      \`node_id\` INT NOT NULL,
-      \`node_role\` VARCHAR(32) NOT NULL,
-      \`distributed_timestamp\` VARCHAR(64) NOT NULL,
-      \`coordinator_id\` INT DEFAULT NULL,
-      \`replication_status\` VARCHAR(32) DEFAULT 'PENDING',
-      \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX (\`booking_id\`),
-      INDEX (\`node_id\`)
-    ) ENGINE=InnoDB;
-  `);
+const SHOWTIMES = [
+  ["10:00", "12:30"],
+  ["14:00", "16:30"],
+  ["18:00", "20:30"],
+  ["21:15", "23:45"]
+];
 
-  await db.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`idempotency_keys\` (
-      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-      \`idempotency_key\` VARCHAR(128) NOT NULL UNIQUE,
-      \`booking_id\` INT DEFAULT NULL,
-      \`response_body\` TEXT DEFAULT NULL,
-      \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX (\`idempotency_key\`)
-    ) ENGINE=InnoDB;
-  `);
-  console.log("✅ Main DB distributed metadata & idempotency tables ready.");
+async function seedPosterMovies() {
+  const [theatres] = await db.promise().query('SELECT t_id FROM "Theatre" ORDER BY t_id LIMIT 1');
+  let theatreId = theatres[0]?.t_id;
+  if (!theatreId) {
+    const [created] = await db.promise().query(
+      `INSERT INTO "Theatre" (t_name, location) VALUES ('PVR Cinemas', 'Downtown Plaza')`
+    );
+    theatreId = created.insertId;
+  }
 
-  // 3. Initialize tables in moviebooking_fault_tolerance (FT DB)
-  await ftPool.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`replicated_bookings\` (
-      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-      \`source_booking_id\` INT NOT NULL UNIQUE,
-      \`customer_id\` INT NOT NULL,
-      \`show_id\` INT NOT NULL,
-      \`ticket_no\` INT DEFAULT NULL,
-      \`seat_data\` TEXT NOT NULL,
-      \`total_price\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-      \`source_node_id\` INT NOT NULL,
-      \`version\` INT NOT NULL DEFAULT 1,
-      \`event_type\` VARCHAR(32) NOT NULL DEFAULT 'BOOKING_CREATED',
-      \`event_timestamp\` VARCHAR(64) NOT NULL,
-      \`replicated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX (\`source_booking_id\`),
-      INDEX (\`customer_id\`),
-      INDEX (\`show_id\`)
-    ) ENGINE=InnoDB;
-  `);
+  for (const movie of POSTER_MOVIES) {
+    const posterUrl = `/posters/${movie.poster}`;
+    const [existing] = await db.promise().query('SELECT m_id FROM "Movie" WHERE m_name = ?', [movie.m_name]);
+    let movieId = existing[0]?.m_id;
+    if (movieId) {
+      await db.promise().query(
+        `UPDATE "Movie"
+         SET poster_url = ?, director = ?, actors = ?, genre = ?, rating = ?, release_date = ?, description = ?, language = 'English'
+         WHERE m_id = ?`,
+        [posterUrl, movie.director, movie.actors, movie.genre, movie.rating, movie.release_date, movie.description, movieId]
+      );
+    } else {
+      const [created] = await db.promise().query(
+        `INSERT INTO "Movie" (m_name, release_date, director, actors, poster_url, description, language, rating, genre)
+         VALUES (?, ?, ?, ?, ?, ?, 'English', ?, ?)`,
+        [movie.m_name, movie.release_date, movie.director, movie.actors, posterUrl, movie.description, movie.rating, movie.genre]
+      );
+      movieId = created.insertId;
+    }
 
-  await ftPool.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`replication_log\` (
-      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-      \`sequence_no\` INT NOT NULL DEFAULT 1,
-      \`source_node_id\` INT NOT NULL,
-      \`destination_node_id\` INT NOT NULL,
-      \`entity_type\` VARCHAR(64) NOT NULL,
-      \`entity_id\` INT NOT NULL,
-      \`operation\` VARCHAR(32) NOT NULL,
-      \`version\` INT NOT NULL DEFAULT 1,
-      \`status\` VARCHAR(32) NOT NULL,
-      \`error_message\` TEXT DEFAULT NULL,
-      \`timestamp\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX (\`sequence_no\`),
-      INDEX (\`status\`)
-    ) ENGINE=InnoDB;
-  `);
-
-  await ftPool.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`server_state\` (
-      \`node_id\` INT PRIMARY KEY,
-      \`role\` VARCHAR(32) NOT NULL,
-      \`host\` VARCHAR(64) NOT NULL,
-      \`port\` INT NOT NULL,
-      \`status\` VARCHAR(32) NOT NULL,
-      \`current_coordinator\` INT DEFAULT NULL,
-      \`is_primary\` BOOLEAN DEFAULT FALSE,
-      \`last_heartbeat\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      \`last_replication_at\` TIMESTAMP NULL DEFAULT NULL,
-      \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-  `);
-
-  await ftPool.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`election_log\` (
-      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-      \`algorithm\` VARCHAR(32) NOT NULL,
-      \`initiator_node_id\` INT NOT NULL,
-      \`elected_coordinator_id\` INT NOT NULL,
-      \`messages_flow\` TEXT NOT NULL,
-      \`participating_nodes\` VARCHAR(255) NOT NULL,
-      \`timestamp\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-  `);
-
-  await ftPool.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`clock_sync_log\` (
-      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-      \`coordinator_id\` INT NOT NULL,
-      \`participating_nodes\` TEXT NOT NULL,
-      \`collected_clocks\` TEXT NOT NULL,
-      \`adjustments\` TEXT NOT NULL,
-      \`timestamp\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-  `);
-
-  await ftPool.promise().query(`
-    CREATE TABLE IF NOT EXISTS \`distributed_request_log\` (
-      \`id\` INT AUTO_INCREMENT PRIMARY KEY,
-      \`request_id\` VARCHAR(64) NOT NULL,
-      \`client_ip\` VARCHAR(64) NOT NULL,
-      \`http_method\` VARCHAR(16) NOT NULL,
-      \`endpoint\` VARCHAR(255) NOT NULL,
-      \`server_id\` INT NOT NULL,
-      \`rpc_method\` VARCHAR(64) DEFAULT NULL,
-      \`duration_ms\` INT NOT NULL,
-      \`status_code\` INT NOT NULL,
-      \`success\` BOOLEAN NOT NULL DEFAULT TRUE,
-      \`timestamp\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB;
-  `);
-
-  console.log("✅ Fault-Tolerance Database tables successfully initialized!");
+    const [shows] = await db.promise().query('SELECT show_id FROM "Shows" WHERE m_id = ?', [movieId]);
+    if (!shows.length) {
+      for (const [start, end] of SHOWTIMES) {
+        await db.promise().query(
+          `INSERT INTO "Shows" (st_time, end_time, language, duration_weeks, m_id, t_id)
+           VALUES (?, ?, 'English', 4, ?, ?)`,
+          [start, end, movieId, theatreId]
+        );
+      }
+    }
+  }
 }
 
-// If executed directly from command line
+export async function initDatabases() {
+  const database = process.env.DB_NAME || "postgres";
+  console.log(`Initializing Postgres schema in database "${database}"...`);
+
+  const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
+  await pool.query(schema);
+
+  await db.promise().query(
+    `INSERT INTO "Admin" (admin_id, password, salary)
+     VALUES (1, 'adminpass1', 0)
+     ON CONFLICT (admin_id) DO NOTHING`
+  );
+
+  await seedPosterMovies();
+
+  console.log("Postgres tables are ready. Open them in pgAdmin under Schemas → public.");
+}
+
 if (process.argv[1]?.endsWith("initFtDb.js")) {
   initDatabases()
-    .then(() => {
-      console.log("🚀 All databases configured successfully!");
-      process.exit(0);
-    })
+    .then(() => process.exit(0))
     .catch((err) => {
-      console.error("❌ Initialization failed:", err);
+      console.error("Initialization failed:", err.message);
+      if (!process.env.DB_PASSWORD) {
+        console.error("Set DB_PASSWORD in server/.env to the postgres password from pgAdmin.");
+      }
       process.exit(1);
     });
 }

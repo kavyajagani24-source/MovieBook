@@ -24,14 +24,16 @@ import {
   RefreshCw,
   Layers,
   Flame,
-  Radio
+  Radio,
+  Scale,
+  GitCompare
 } from 'lucide-react';
-import { distributedAPI, checkoutAPI } from '@/lib/api';
+import { distributedAPI, checkoutAPI, probeLoadBalancer, LOAD_BALANCER_URL } from '@/lib/api';
 
 const DistributedDashboard = () => {
   const [nodes, setNodes] = useState<any[]>([]);
   const [clocks, setClocks] = useState<any[]>([]);
-  const [coordinatorId, setCoordinatorId] = useState<number>(3);
+  const [coordinatorId, setCoordinatorId] = useState<number>(1);
   const [rpcLogs, setRpcLogs] = useState<any[]>([]);
   const [replicationStatus, setReplicationStatus] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,8 +55,6 @@ const DistributedDashboard = () => {
   // Experiment 3: Berkeley Clock Sync State
   const [berkeleyResult, setBerkeleyResult] = useState<any>(null);
   const [isSyncingClocks, setIsSyncingClocks] = useState(false);
-
-  // Experiment 4: Elections State
   const [electionResult, setElectionResult] = useState<any>(null);
   const [isElectionRunning, setIsElectionRunning] = useState(false);
 
@@ -65,6 +65,17 @@ const DistributedDashboard = () => {
 
   // Fault Tolerance: which node to target for failure/promotion
   const [failoverTargetNode, setFailoverTargetNode] = useState<number>(1);
+
+  // Load balancer
+  const [lbCount, setLbCount] = useState('9');
+  const [lbHits, setLbHits] = useState<any[]>([]);
+  const [isLbRunning, setIsLbRunning] = useState(false);
+
+  // Data consistency
+  const [consistencyKey, setConsistencyKey] = useState('seat-A1');
+  const [consistencyValue, setConsistencyValue] = useState('booked');
+  const [consistencyResult, setConsistencyResult] = useState<any>(null);
+  const [isConsistencyRunning, setIsConsistencyRunning] = useState(false);
 
   useEffect(() => {
     fetchClusterData();
@@ -168,7 +179,6 @@ const DistributedDashboard = () => {
     }
   };
 
-  // 4. Run Bully Election
   const handleBullyElection = async () => {
     setIsElectionRunning(true);
     setElectionResult(null);
@@ -176,16 +186,15 @@ const DistributedDashboard = () => {
       const resp = await distributedAPI.runBullyElection();
       setElectionResult(resp.data);
       setCoordinatorId(resp.data.electedCoordinator);
-      toast.success(`Bully Election complete! Node ${resp.data.electedCoordinator} elected Coordinator.`);
+      toast.success(`Bully election elected container ${resp.data.electedCoordinator}`);
       fetchClusterData(true);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message || 'Bully Election failed');
+      toast.error(err.response?.data?.error || err.message || 'Bully election failed');
     } finally {
       setIsElectionRunning(false);
     }
   };
 
-  // 5. Run Ring Election
   const handleRingElection = async () => {
     setIsElectionRunning(true);
     setElectionResult(null);
@@ -193,20 +202,22 @@ const DistributedDashboard = () => {
       const resp = await distributedAPI.runRingElection();
       setElectionResult(resp.data);
       setCoordinatorId(resp.data.electedCoordinator);
-      toast.success(`Ring Election complete! Token circulated, Node ${resp.data.electedCoordinator} elected.`);
+      toast.success(`Ring election elected container ${resp.data.electedCoordinator}`);
       fetchClusterData(true);
     } catch (err: any) {
-      toast.error(err.response?.data?.error || err.message || 'Ring Election failed');
+      toast.error(err.response?.data?.error || err.message || 'Ring election failed');
     } finally {
       setIsElectionRunning(false);
     }
   };
 
-  // 6. Simulate Server Failure / Failover
+  // 4. Simulate Server Failure / Failover
   const handleToggleFailure = async () => {
     try {
-      const resp = await distributedAPI.simulateFailure(failoverTargetNode);
-      toast.info(`Node ${failoverTargetNode} state → ${resp.data.status}`);
+      const target = nodes.find((node) => node.nodeId === failoverTargetNode);
+      const stop = target?.status !== 'OFFLINE';
+      await distributedAPI.simulateFailure(failoverTargetNode, stop);
+      toast.info(stop ? `Container ${failoverTargetNode} stopped` : `Container ${failoverTargetNode} started`);
       fetchClusterData(true);
     } catch (err: any) {
       toast.error(err.message || 'Failed to toggle failure');
@@ -221,6 +232,55 @@ const DistributedDashboard = () => {
       fetchClusterData(true);
     } catch (err: any) {
       toast.error(err.message || 'Backup promotion failed');
+    }
+  };
+
+  const handleProbeLoadBalancer = async () => {
+    setIsLbRunning(true);
+    setLbHits([]);
+    try {
+      const hits = await probeLoadBalancer(Number(lbCount) || 9);
+      setLbHits(hits);
+      const served = hits.filter((hit) => hit.ok).length;
+      toast.success(`Load balancer placed ${served} of ${hits.length} requests on application containers.`);
+    } catch (err: any) {
+      toast.error(err.message || 'Load balancer probe failed');
+    } finally {
+      setIsLbRunning(false);
+    }
+  };
+
+  const handleConsistencyWrite = async (mode: 'strong' | 'eventual') => {
+    setIsConsistencyRunning(true);
+    try {
+      const resp = await distributedAPI.writeConsistency({
+        key: consistencyKey || 'seat-A1',
+        value: consistencyValue || 'booked',
+        mode
+      });
+      setConsistencyResult(resp.data);
+      toast.success(
+        mode === 'strong'
+          ? `Strong write v${resp.data.version}: backup acknowledged before the response.`
+          : `Eventual write v${resp.data.version}: primary committed, replica follows in ${resp.data.replicaDelayMs}ms.`
+      );
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || 'Consistency write failed');
+    } finally {
+      setIsConsistencyRunning(false);
+    }
+  };
+
+  const handleConsistencyCompare = async () => {
+    setIsConsistencyRunning(true);
+    try {
+      const resp = await distributedAPI.compareConsistency(consistencyKey || 'seat-A1');
+      setConsistencyResult(resp.data);
+      toast.success(resp.data.consistent ? 'All reachable containers agree.' : 'Containers do not all agree yet.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || 'Consistency compare failed');
+    } finally {
+      setIsConsistencyRunning(false);
     }
   };
 
@@ -293,7 +353,7 @@ const DistributedDashboard = () => {
                 </Badge>
               </div>
               <p className="text-muted-foreground mt-1">
-                Real-time management for MovieBook 4-node cluster (3 Active Application Servers + 1 Backup Server)
+                Four Docker containers behind an Nginx load balancer on {LOAD_BALANCER_URL}. Application traffic is spread across containers 1–3. The backup container holds the replica.
               </p>
             </div>
 
@@ -336,7 +396,7 @@ const DistributedDashboard = () => {
                     <div className="flex items-center gap-2">
                       <Server className={`h-5 w-5 ${isOffline ? 'text-destructive' : 'text-primary'}`} />
                       <span className="font-bold text-lg">
-                        {node.nodeId <= 3 ? `Server ${node.nodeId}` : 'Backup Server'}
+                        {node.nodeId <= 3 ? `Container ${node.nodeId}` : 'Backup Container'}
                       </span>
                     </div>
                     <Badge
@@ -351,6 +411,10 @@ const DistributedDashboard = () => {
                   </div>
 
                   <div className="space-y-2 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Container:</span>
+                      <span className="font-mono text-xs text-foreground">{node.hostname || '—'}</span>
+                    </div>
                     <div className="flex justify-between text-muted-foreground">
                       <span>Role:</span>
                       <span className="font-semibold text-foreground">{node.role}</span>
@@ -397,7 +461,7 @@ const DistributedDashboard = () => {
 
           {/* Main Experiments Tabs */}
           <Tabs defaultValue="concurrency" className="space-y-6">
-            <TabsList className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 bg-muted/60 p-1">
+            <TabsList className="flex h-auto flex-wrap justify-start gap-2 bg-muted/60 p-1">
               <TabsTrigger value="concurrency" className="gap-2">
                 <Flame className="h-4 w-4" />
                 <span>Concurrency</span>
@@ -421,6 +485,14 @@ const DistributedDashboard = () => {
               <TabsTrigger value="probing" className="gap-2">
                 <Layers className="h-4 w-4" />
                 <span>Target Probe</span>
+              </TabsTrigger>
+              <TabsTrigger value="loadbalancer" className="gap-2">
+                <Scale className="h-4 w-4" />
+                <span>Load Balancer</span>
+              </TabsTrigger>
+              <TabsTrigger value="consistency" className="gap-2">
+                <GitCompare className="h-4 w-4" />
+                <span>Consistency</span>
               </TabsTrigger>
             </TabsList>
 
@@ -608,7 +680,6 @@ const DistributedDashboard = () => {
               </Card>
             </TabsContent>
 
-            {/* TAB 3: LEADER ELECTION (BULLY & RING) */}
             <TabsContent value="elections">
               <Card className="p-6">
                 <div className="flex items-center gap-3 mb-6">
@@ -616,59 +687,36 @@ const DistributedDashboard = () => {
                     <Vote className="h-6 w-6" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold">Experiment 4: Election Algorithms (Bully & Ring)</h3>
+                    <h3 className="text-xl font-bold">Bully and Ring Election</h3>
                     <p className="text-sm text-muted-foreground">
-                      Elect a cluster coordinator among active servers. Bully algorithm uses highest-ID dominance; Ring algorithm circulates an election token around the logical topology.
+                      Container 1 starts the election and asks the other application containers who is reachable. The highest reachable container becomes coordinator. A stopped container is skipped.
                     </p>
                   </div>
                 </div>
-
                 <div className="flex flex-wrap gap-4 mb-6">
-                  <Button
-                    onClick={handleBullyElection}
-                    disabled={isElectionRunning}
-                    className="gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-                  >
+                  <Button onClick={handleBullyElection} disabled={isElectionRunning} className="gap-2">
                     <Play className="h-4 w-4" />
-                    Run Bully Election
+                    {isElectionRunning ? 'Running election...' : 'Run Bully Election'}
                   </Button>
-                  <Button
-                    onClick={handleRingElection}
-                    disabled={isElectionRunning}
-                    variant="outline"
-                    className="gap-2 border-purple-500/40 text-purple-500 hover:bg-purple-500/10"
-                  >
+                  <Button onClick={handleRingElection} disabled={isElectionRunning} variant="outline" className="gap-2">
                     <RotateCcw className="h-4 w-4" />
                     Run Ring Election
                   </Button>
                 </div>
-
                 {electionResult && (
                   <div className="space-y-4 pt-4 border-t border-border">
-                    <div className="flex items-center justify-between p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                      <div>
-                        <span className="text-xs uppercase font-bold text-purple-500">
-                          {electionResult.algorithm} Election Victor
-                        </span>
-                        <div className="text-xl font-extrabold text-foreground">
-                          Server {electionResult.electedCoordinator} Elected Coordinator
-                        </div>
-                      </div>
-                      <Badge className="bg-purple-600 text-white text-sm px-3 py-1">
-                        Active Coordinator: Node {electionResult.electedCoordinator}
-                      </Badge>
+                    <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+                      <div className="text-xs uppercase font-bold text-purple-500">{electionResult.algorithm} result</div>
+                      <div className="text-xl font-extrabold">Container {electionResult.electedCoordinator} is coordinator</div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Reachable: {(electionResult.activeNodes || []).join(', ') || 'none'}
+                        {(electionResult.failedNodes || []).length > 0 ? ` · Unreachable: ${electionResult.failedNodes.join(', ')}` : ''}
+                      </p>
                     </div>
-
-                    <h4 className="font-semibold text-sm">Message Flow Protocol:</h4>
                     <div className="max-h-64 overflow-y-auto space-y-2 font-mono text-xs bg-muted/20 p-4 rounded-lg border border-border/50">
                       {electionResult.electionMessages?.map((msg: any, idx: number) => (
                         <div key={idx} className="p-2 bg-background border border-border/60 rounded">
-                          <div className="flex items-center gap-2 font-bold text-primary">
-                            <span className="px-1.5 py-0.5 bg-primary/10 rounded text-[10px]">
-                              {msg.type}
-                            </span>
-                            <span>{msg.detail}</span>
-                          </div>
+                          <span className="font-bold text-primary">{msg.type}</span> {msg.detail}
                         </div>
                       ))}
                     </div>
@@ -688,7 +736,7 @@ const DistributedDashboard = () => {
                     <div>
                       <h3 className="text-xl font-bold">Experiment 5: Fault Tolerance & Primary-Backup Replication</h3>
                       <p className="text-sm text-muted-foreground">
-                        Demonstrates live state replication to dedicated Backup Server (Node 4) and the independent <code className="text-primary font-bold">moviebooking_fault_tolerance</code> database.
+                        Each committed booking is sent to the backup container and stored in the replicated_bookings table in Postgres.
                       </p>
                     </div>
                   </div>
@@ -715,7 +763,9 @@ const DistributedDashboard = () => {
                       className="gap-2"
                     >
                       <AlertTriangle className="h-4 w-4" />
-                      Simulate Node {failoverTargetNode} Failure
+                      {nodes.find((node) => node.nodeId === failoverTargetNode)?.status === 'OFFLINE'
+                        ? `Start container ${failoverTargetNode}`
+                        : `Stop container ${failoverTargetNode}`}
                     </Button>
                     <Button
                       variant="default"
@@ -733,7 +783,7 @@ const DistributedDashboard = () => {
                   <Card className="p-4 bg-muted/20">
                     <span className="text-xs text-muted-foreground">Dedicated FT Database</span>
                     <div className="text-lg font-bold text-primary mt-1 font-mono">
-                      {replicationStatus?.faultToleranceDb || 'moviebooking_fault_tolerance'}
+                      {replicationStatus?.faultToleranceDb || 'postgres'}
                     </div>
                     <Badge variant="outline" className="mt-2 text-emerald-500 border-emerald-500/40">
                       {replicationStatus?.status || 'ONLINE'}
@@ -964,6 +1014,161 @@ const DistributedDashboard = () => {
                       <pre className="overflow-x-auto p-2 bg-background rounded border border-border/50">
                         {JSON.stringify(targetBookingResult, null, 2)}
                       </pre>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
+
+            {/* TAB 7: NGINX LOAD BALANCER */}
+            <TabsContent value="loadbalancer">
+              <Card className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                    <Scale className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Nginx Load Balancer</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Requests to {LOAD_BALANCER_URL} are round-robined across containers 1, 2, and 3. Stopping a container removes it from the rotation. The backup container receives requests only when containers 1, 2, and 3 are all stopped.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Requests to send</label>
+                    <Input
+                      type="number"
+                      value={lbCount}
+                      onChange={(e) => setLbCount(e.target.value)}
+                      placeholder="9"
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex items-end">
+                    <Button
+                      onClick={handleProbeLoadBalancer}
+                      disabled={isLbRunning}
+                      className="gap-2"
+                    >
+                      <Play className="h-4 w-4" />
+                      {isLbRunning ? 'Sending through Nginx...' : 'Send requests through the load balancer'}
+                    </Button>
+                  </div>
+                </div>
+
+                {lbHits.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[1, 2, 3, 4].map((id) => (
+                        <div key={id} className="bg-muted/40 p-3 rounded-lg">
+                          <span className="text-xs text-muted-foreground">{id === 4 ? 'Backup' : `Container ${id}`}</span>
+                          <div className="text-xl font-bold">{lbHits.filter((hit) => hit.ok && hit.nodeId === id).length}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="max-h-64 overflow-y-auto space-y-2 font-mono text-xs bg-muted/20 p-4 rounded-lg border border-border/50">
+                      {lbHits.map((hit) => (
+                        <div key={hit.index} className="flex items-center justify-between p-2 rounded bg-background border border-border/60">
+                          <span>Request {hit.index}</span>
+                          <span className={hit.ok ? 'text-emerald-500 font-semibold' : 'text-destructive'}>
+                            {hit.ok ? `Container ${hit.nodeId} · ${hit.hostname}` : hit.error || 'failed'}
+                          </span>
+                          <span className="text-muted-foreground">{hit.ms}ms</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
+
+            {/* TAB 8: DATA CONSISTENCY */}
+            <TabsContent value="consistency">
+              <Card className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-sky-500/10 text-sky-500 rounded-lg">
+                    <GitCompare className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">Data Consistency</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Application containers share the primary database, so they always read the same version. The backup container reads the replica. A strong write waits for the backup to acknowledge. An eventual write returns as soon as the primary commits, and the replica catches up about two seconds later.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Record key</label>
+                    <Input value={consistencyKey} onChange={(e) => setConsistencyKey(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground">Value</label>
+                    <Input value={consistencyValue} onChange={(e) => setConsistencyValue(e.target.value)} />
+                  </div>
+                  <div className="md:col-span-2 flex flex-wrap items-end gap-2">
+                    <Button
+                      onClick={() => handleConsistencyWrite('strong')}
+                      disabled={isConsistencyRunning}
+                      className="gap-2"
+                    >
+                      Strong write
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleConsistencyWrite('eventual')}
+                      disabled={isConsistencyRunning}
+                    >
+                      Eventual write
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={handleConsistencyCompare}
+                      disabled={isConsistencyRunning}
+                    >
+                      Compare containers
+                    </Button>
+                  </div>
+                </div>
+
+                {consistencyResult && (
+                  <div className="space-y-4 pt-4 border-t border-border">
+                    <div className="flex flex-wrap gap-3 text-sm">
+                      <Badge className={consistencyResult.consistent ? 'bg-emerald-600 text-white' : 'bg-amber-600 text-white'}>
+                        {consistencyResult.consistent ? 'CONSISTENT' : 'NOT YET CONSISTENT'}
+                      </Badge>
+                      {consistencyResult.mode && <Badge variant="outline">{consistencyResult.mode}</Badge>}
+                      {consistencyResult.replication && <Badge variant="outline">{consistencyResult.replication}</Badge>}
+                      <span className="text-muted-foreground">
+                        Version {consistencyResult.expectedVersion ?? consistencyResult.version ?? '—'}
+                        {' · '}
+                        {consistencyResult.containersMatching ?? 0}/{consistencyResult.containersReached ?? 0} containers match
+                        {' · '}
+                        replica {consistencyResult.replicaMatches ? 'matches' : `at v${consistencyResult.replicaVersion ?? '—'}`}
+                      </span>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto font-mono text-xs border border-border rounded-lg">
+                      <table className="w-full text-left">
+                        <thead className="bg-muted/40 border-b border-border">
+                          <tr>
+                            <th className="p-2">Container</th>
+                            <th className="p-2">Source</th>
+                            <th className="p-2">Version</th>
+                            <th className="p-2">Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/50">
+                          {(consistencyResult.views || []).map((view: any) => (
+                            <tr key={view.nodeId}>
+                              <td className="p-2">Container {view.nodeId}{view.hostname ? ` · ${view.hostname}` : ''}</td>
+                              <td className="p-2">{view.source}</td>
+                              <td className="p-2">{view.version ?? '—'}</td>
+                              <td className="p-2">{view.value ?? view.error ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}

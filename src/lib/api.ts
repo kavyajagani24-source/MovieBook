@@ -1,16 +1,48 @@
 import axios from 'axios';
 import { routeDistributedCheckout } from './distributedRouter';
 
-// Configure axios instance
+// Bookings and movies are read from the application server (container 1 when Docker is up).
+// The Nginx load balancer stays on port 5050 and is used by the distributed dashboard probe.
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 // Backend base (used by UI to build absolute URLs for assets)
-export const BACKEND_BASE = 'http://localhost:5000';
+export const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
+/** Posters in public/posters are served by the website itself. */
+export function posterSrc(url?: string) {
+  if (!url) return undefined;
+  if (url.startsWith('http') || url.startsWith('/')) return url;
+  return `${BACKEND_BASE}/${url}`;
+}
+export const LOAD_BALANCER_URL = import.meta.env.VITE_LB_URL || 'http://localhost:5050';
+
+/** Send sequential requests through Nginx so each one can land on a different container. */
+export async function probeLoadBalancer(count: number) {
+  const hits: any[] = [];
+  const total = Math.max(1, Math.min(count, 100));
+  for (let i = 1; i <= total; i++) {
+    const started = Date.now();
+    try {
+      const resp = await axios.get(`${LOAD_BALANCER_URL}/api/distributed/lb-hit`, { timeout: 4000 });
+      hits.push({ index: i, ok: true, ms: Date.now() - started, ...resp.data });
+    } catch (err: any) {
+      hits.push({
+        index: i,
+        ok: false,
+        ms: Date.now() - started,
+        error: err.response?.data?.error || err.message,
+        status: err.response?.status,
+        nodeId: err.response?.data?.nodeId
+      });
+    }
+  }
+  return hits;
+}
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -97,6 +129,7 @@ export const showsAPI = {
 // Tickets
 export const ticketsAPI = {
   create: (data: any) => api.post('/tickets/create', data),
+  getByShow: (show_id: number) => api.get(`/tickets/show/${show_id}`),
   getById: (ticket_no: number) => api.get(`/tickets/${ticket_no}`),
   getAll: () => api.get('/tickets'),
   update: (ticket_no: number, data: any) => api.put(`/tickets/${ticket_no}`, data),
@@ -124,18 +157,38 @@ export const discountAPI = {
   delete: (offer_id: number) => api.delete(`/discounts/${offer_id}`),
 };
 
+const NODE_API_BASES = [5000, 5001, 5002, 5003].map((port) => `http://localhost:${port}/api`);
+
+/** Use whichever application container is still running. */
+async function anyNode(call: (client: ReturnType<typeof axios.create>) => Promise<any>, timeout = 4000) {
+  let lastError: unknown;
+  for (const baseURL of NODE_API_BASES) {
+    try {
+      return await call(axios.create({ baseURL, timeout }));
+    } catch (err: any) {
+      lastError = err;
+      if (err.response) throw err;
+    }
+  }
+  throw lastError;
+}
+
 // Distributed Systems APIs
 export const distributedAPI = {
-  getNodes: () => api.get('/distributed/nodes'),
-  getStatus: () => api.get('/distributed/status'),
-  getClocks: () => api.get('/distributed/clocks'),
+  getNodes: () => anyNode((client) => client.get('/distributed/nodes')),
+  getStatus: () => anyNode((client) => client.get('/distributed/status')),
+  getClocks: () => anyNode((client) => client.get('/distributed/clocks')),
   getRpcLogs: () => api.get('/distributed/rpc/logs'),
   sendRpc: (method: string, params: any) => api.post('/distributed/rpc', { method, params }),
   runConcurrencyTest: (data: any) => api.post('/distributed/concurrency-test', data),
   syncBerkeleyClocks: () => api.post('/distributed/berkeley/sync'),
   runBullyElection: () => api.post('/distributed/election/bully'),
   runRingElection: () => api.post('/distributed/election/ring'),
-  getReplicationStatus: () => api.get('/distributed/replication/status'),
-  simulateFailure: (nodeId?: number, offline?: boolean) => api.post('/distributed/simulate-failure', { nodeId, offline }),
+  getReplicationStatus: () => anyNode((client) => client.get('/distributed/replication/status')),
+  simulateFailure: (nodeId?: number, offline?: boolean) =>
+    anyNode((client) => client.post('/distributed/simulate-failure', { nodeId, offline }), 30000),
   promoteBackup: (nodeId?: number) => api.post(`/distributed/promote-backup`, nodeId ? { nodeId } : {}),
+  writeConsistency: (data: { key: string; value: string; mode: 'strong' | 'eventual' }) =>
+    api.post('/distributed/consistency/write', data),
+  compareConsistency: (key: string) => api.post('/distributed/consistency/compare', { key }),
 };

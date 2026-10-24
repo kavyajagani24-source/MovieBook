@@ -20,7 +20,7 @@ const Checkout = () => {
   const [bookingId, setBookingId] = useState<number | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
 
-  const { selectedSeats = [], totalAmount = 0, discountCode = null } = location.state || {};
+  const { selectedSeats = [], totalAmount = 0, discountCode = null, show = null } = location.state || {};
 
   const handlePayment = async () => {
     if (!user) {
@@ -58,11 +58,11 @@ const Checkout = () => {
 
         const resp = await routeDistributedCheckout({
           show_id: Number(showId),
-          show_date: new Date().toISOString().split('T')[0],
-          show_time: '10:00',
+          show_date: show?.show_date || new Date().toISOString().split('T')[0],
+          show_time: show?.st_time || show?.show_time || '18:00',
           seats: seatsPayload,
           hall_no: 1,
-          t_id: 1,
+          t_id: show?.t_id || 1,
           admin_id: 1,
           c_id: customerId,
           offer_id: discountCode || null,

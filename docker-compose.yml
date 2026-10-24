@@ -1,0 +1,103 @@
+# Four MovieBook server containers plus an Nginx load balancer.
+# App containers use the Postgres server already open in pgAdmin (port 5432).
+#
+#   docker compose up --build
+#
+# Load balancer:  http://localhost:5050
+# Container 1:    http://localhost:5000
+# Container 2:    http://localhost:5001
+# Container 3:    http://localhost:5002
+# Backup:         http://localhost:5003
+
+x-server: &server
+  build: ./server
+  # Mounted so a password that contains "$" is read by Node, not rewritten by Compose.
+  volumes:
+    - ./server/.env:/app/.env:ro
+    - /var/run/docker.sock:/var/run/docker.sock
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  restart: unless-stopped
+  environment: &server-env
+    RUNTIME: docker
+    DB_HOST: host.docker.internal
+    DB_PORT: 5432
+    DB_USER: postgres
+    DB_NAME: postgres
+    FT_DB_HOST: host.docker.internal
+    FT_DB_PORT: 5432
+    FT_DB_USER: postgres
+    FT_DB_NAME: postgres
+    NODE1_URL: http://server1:5000
+    NODE2_URL: http://server2:5000
+    NODE3_URL: http://server3:5000
+    BACKUP_URL: http://backup:5000
+
+services:
+  server1:
+    <<: *server
+    container_name: moviebook-server-1
+    environment:
+      <<: *server-env
+      PORT: 5000
+      PUBLIC_PORT: 5000
+      NODE_ID: 1
+      NODE_ROLE: SERVER
+      CLOCK_OFFSET_MS: 5000
+    ports:
+      - "5000:5000"
+
+  server2:
+    <<: *server
+    container_name: moviebook-server-2
+    environment:
+      <<: *server-env
+      PORT: 5000
+      PUBLIC_PORT: 5001
+      NODE_ID: 2
+      NODE_ROLE: SERVER
+      CLOCK_OFFSET_MS: -3000
+    ports:
+      - "5001:5000"
+
+  server3:
+    <<: *server
+    container_name: moviebook-server-3
+    environment:
+      <<: *server-env
+      PORT: 5000
+      PUBLIC_PORT: 5002
+      NODE_ID: 3
+      NODE_ROLE: SERVER
+      CLOCK_OFFSET_MS: 8000
+    ports:
+      - "5002:5000"
+
+  backup:
+    <<: *server
+    container_name: moviebook-backup
+    environment:
+      <<: *server-env
+      PORT: 5000
+      PUBLIC_PORT: 5003
+      NODE_ID: 4
+      NODE_ROLE: BACKUP
+      CLOCK_OFFSET_MS: 0
+    ports:
+      - "5003:5000"
+
+  loadbalancer:
+    image: nginx:1.27-alpine
+    container_name: moviebook-loadbalancer
+    entrypoint: ["/bin/sh", "/lb-entrypoint.sh"]
+    depends_on:
+      - server1
+      - server2
+      - server3
+      - backup
+    ports:
+      - "5050:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/lb-entrypoint.sh:/lb-entrypoint.sh:ro
+    restart: unless-stopped

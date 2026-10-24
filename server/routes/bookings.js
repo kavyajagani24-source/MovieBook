@@ -1,22 +1,50 @@
 import express from "express";
 import db from "../config/db.js";
+import { ensureSeatLabelColumn } from "./tickets.js";
 const router = express.Router();
+
+function shapeBooking(row) {
+  const seat = row.seat_label || row.seat_no;
+  return {
+    booking_id: row.booking_id,
+    booking_date: row.booking_date,
+    ticket_no: row.ticket_no,
+    c_id: row.c_id,
+    total_price: row.total_price,
+    movie: row.m_name ? { m_id: row.m_id, m_name: row.m_name } : null,
+    theatre: row.t_name ? { t_id: row.t_id, t_name: row.t_name, location: row.location } : null,
+    ticket: {
+      ticket_no: row.ticket_no,
+      show_id: row.show_id,
+      show_date: row.show_date,
+      show_time: row.show_time,
+      seat_no: seat,
+      hall_no: row.hall_no,
+      t_id: row.t_id,
+      price: row.price ?? row.total_price ?? 0
+    }
+  };
+}
 
 // GET /api/bookings/customer/:c_id (get bookings for a specific customer)
 router.get("/customer/:c_id", async (req, res) => {
   const { c_id } = req.params;
   try {
+    const hasLabel = await ensureSeatLabelColumn();
+    const seatLabelCol = hasLabel ? "t.seat_label," : "";
     const [rows] = await db.promise().query(
-      `SELECT b.booking_id, b.booking_date, b.total_price, b.offer_id, t.ticket_no, t.seat_no, t.show_date, t.show_time, s.show_id, m.m_name, th.t_name, th.location
-       FROM Booking b
-       JOIN Tickets t ON b.ticket_no = t.ticket_no
-       JOIN Shows s ON t.show_id = s.show_id
-       JOIN Movie m ON s.m_id = m.m_id
-       JOIN Theatre th ON t.t_id = th.t_id
+      `SELECT b.booking_id, b.booking_date, b.total_price, b.offer_id, b.ticket_no, b.c_id,
+              t.seat_no, ${seatLabelCol} t.show_date, t.show_time, t.hall_no, t.price, t.show_id,
+              m.m_id, m.m_name, th.t_id, th.t_name, th.location
+       FROM "Booking" b
+       LEFT JOIN "Tickets" t ON b.ticket_no = t.ticket_no
+       LEFT JOIN "Shows" s ON t.show_id = s.show_id
+       LEFT JOIN "Movie" m ON s.m_id = m.m_id
+       LEFT JOIN "Theatre" th ON COALESCE(s.t_id, t.t_id) = th.t_id
        WHERE b.c_id = ? ORDER BY b.booking_date DESC`,
       [c_id]
     );
-    res.json(rows);
+    res.json(rows.map(shapeBooking));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
