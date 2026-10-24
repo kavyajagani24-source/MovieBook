@@ -187,18 +187,18 @@ export const distributedAPI = {
   getNodes: () => anyNode((client) => client.get('/distributed/nodes')),
   getStatus: () => anyNode((client) => client.get('/distributed/status')),
   getClocks: () => anyNode((client) => client.get('/distributed/clocks')),
-  getRpcLogs: () => api.get('/distributed/rpc/logs'),
-  sendRpc: (method: string, params: any) => api.post('/distributed/rpc', { method, params }),
-  runConcurrencyTest: (data: any) => api.post('/distributed/concurrency-test', data),
-  syncBerkeleyClocks: () => api.post('/distributed/berkeley/sync'),
-  runBullyElection: () => api.post('/distributed/election/bully'),
-  runRingElection: () => api.post('/distributed/election/ring'),
+  getRpcLogs: () => anyNode((client) => client.get('/distributed/rpc/logs')),
+  sendRpc: (method: string, params: any) => anyNode((client) => client.post('/distributed/rpc', { method, params })),
+  runConcurrencyTest: (data: any) => anyNode((client) => client.post('/distributed/concurrency-test', data)),
+  syncBerkeleyClocks: () => anyNode((client) => client.post('/distributed/berkeley/sync')),
+  runBullyElection: () => anyNode((client) => client.post('/distributed/election/bully')),
+  runRingElection: () => anyNode((client) => client.post('/distributed/election/ring')),
   getReplicationStatus: () => anyNode((client) => client.get('/distributed/replication/status')),
   simulateFailure: (nodeId?: number, offline?: boolean) =>
     anyNode((client) => client.post('/distributed/simulate-failure', { nodeId, offline }), 30000),
   promoteBackup: (nodeId?: number) =>
     anyNode((client) => client.post('/distributed/promote-backup', nodeId ? { nodeId } : {})),
   writeConsistency: (data: { key: string; value: string; mode: 'strong' | 'eventual' }) =>
-    api.post('/distributed/consistency/write', data),
-  compareConsistency: (key: string) => api.post('/distributed/consistency/compare', { key }),
+    anyNode((client) => client.post('/distributed/consistency/write', data)),
+  compareConsistency: (key: string) => anyNode((client) => client.post('/distributed/consistency/compare', { key })),
 };

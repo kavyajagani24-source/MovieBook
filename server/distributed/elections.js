@@ -92,6 +92,10 @@ export async function runBullyElection(initiatorId = NODE_ID) {
     electedCoordinator = initiatorId;
   }
 
+  setCoordinator(electedCoordinator);
+  const controllerUrl = process.env.CONTROLLER_URL || "http://controller:5000";
+  axios.post(`${controllerUrl}/api/distributed/coordinator-update`, { coordinatorId: electedCoordinator }, { timeout: 1200 }).catch(() => {});
+
   // Broadcast victory / COORDINATOR announcement to all peers
   for (const peer of appServers) {
     electionMessages.push({
@@ -207,6 +211,10 @@ export async function runRingElection(initiatorId = NODE_ID) {
     token: [...token],
     detail: `Token returned to initiator Node ${initiatorId}. Winner is MAX([${token.join(", ")}]) = Node ${electedCoordinator}.`
   });
+
+  setCoordinator(electedCoordinator);
+  const controllerUrlRing = process.env.CONTROLLER_URL || "http://controller:5000";
+  axios.post(`${controllerUrlRing}/api/distributed/coordinator-update`, { coordinatorId: electedCoordinator }, { timeout: 1200 }).catch(() => {});
 
   // Circulate Coordinator Announcement around ring
   for (const id of activeNodes) {

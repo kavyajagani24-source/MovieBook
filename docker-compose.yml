@@ -1,8 +1,8 @@
-# Four MovieBook server containers plus an Nginx load balancer.
-# App containers use the Postgres server already open in pgAdmin (port 5432).
+# Four MovieBook server containers, a PostgreSQL database, plus an Nginx load balancer.
 #
 #   docker compose up --build
 #
+# Postgres:       http://localhost:5432
 # Load balancer:  http://localhost:5050
 # Container 1:    http://localhost:5000
 # Container 2:    http://localhost:5001
@@ -18,13 +18,17 @@ x-server: &server
   extra_hosts:
     - "host.docker.internal:host-gateway"
   restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
   environment: &server-env
     RUNTIME: docker
-    DB_HOST: host.docker.internal
+    DB_HOST: postgres
+    DB_HOST_DOCKER: postgres
     DB_PORT: 5432
     DB_USER: postgres
     DB_NAME: postgres
-    FT_DB_HOST: host.docker.internal
+    FT_DB_HOST: postgres
     FT_DB_PORT: 5432
     FT_DB_USER: postgres
     FT_DB_NAME: postgres
@@ -34,6 +38,24 @@ x-server: &server
     BACKUP_URL: http://backup:5000
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: moviebook-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Shriya10@
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
   server1:
     <<: *server
     container_name: moviebook-server-1
@@ -96,13 +118,17 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       RUNTIME: docker
-      DB_HOST: host.docker.internal
+      DB_HOST: postgres
+      DB_HOST_DOCKER: postgres
       DB_PORT: 5432
       DB_USER: postgres
       DB_NAME: postgres
-      FT_DB_HOST: host.docker.internal
+      FT_DB_HOST: postgres
       FT_DB_PORT: 5432
       FT_DB_USER: postgres
       FT_DB_NAME: postgres
@@ -134,3 +160,6 @@ services:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/lb-entrypoint.sh:/lb-entrypoint.sh:ro
     restart: unless-stopped
+
+volumes:
+  pgdata:

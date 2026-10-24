@@ -96,7 +96,15 @@ const DistributedDashboard = () => {
       ]);
 
       if (nodesRes.status === 'fulfilled') {
-        setNodes(nodesRes.value.data.nodes || []);
+        const fetchedNodes = nodesRes.value.data.nodes || [];
+        setNodes(fetchedNodes);
+        // Derive coordinator from live node data (not clocks endpoint which may
+        // hit the stale in-memory controller). Any online node's currentCoordinator
+        // field reflects the true elected coordinator.
+        const onlineNode = fetchedNodes.find((n: any) => n.status === 'ONLINE' && n.currentCoordinator);
+        if (onlineNode?.currentCoordinator) {
+          setCoordinatorId(onlineNode.currentCoordinator);
+        }
       } else {
         setNodes([
           { nodeId: 1, role: 'SERVER', port: 5000, status: 'OFFLINE', hostname: '-', clockTime: '-', clockOffsetMs: 0 },
@@ -107,9 +115,7 @@ const DistributedDashboard = () => {
       }
       if (clocksRes.status === 'fulfilled') {
         setClocks(clocksRes.value.data.clocks || []);
-        if (clocksRes.value.data.coordinatorId) {
-          setCoordinatorId(clocksRes.value.data.coordinatorId);
-        }
+        // Only use clocks coordinator as fallback if nodes didn't give us one
       }
       if (logsRes.status === 'fulfilled') {
         setRpcLogs(logsRes.value.data || []);

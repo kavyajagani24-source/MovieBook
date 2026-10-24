@@ -23,6 +23,25 @@ export async function runConcurrentBookingTest({
 
   console.log(`[Concurrency] Running test with ${requestCount} simultaneous requests for Show ${showId}, Seat ${rawSeat}`);
 
+  // ── CLEANUP: Remove any prior booking of this test seat so the test is repeatable ──
+  try {
+    const [existingTickets] = await db.promise().query(
+      `SELECT ticket_no FROM "Tickets" WHERE show_id = $1 AND (COALESCE(seat_label, '') = $2 OR COALESCE(seat_label, '') = '' AND seat_no::text = $3::text)`,
+      [showId, rawSeat, String(seatNumeric)]
+    );
+    if (existingTickets.length > 0) {
+      const ticketNos = existingTickets.map((t) => t.ticket_no);
+      await db.promise().query(`DELETE FROM "Booking" WHERE ticket_no = ANY($1)`, [ticketNos]);
+      await db.promise().query(
+        `DELETE FROM "Tickets" WHERE show_id = $1 AND (COALESCE(seat_label, '') = $2 OR COALESCE(seat_label, '') = '' AND seat_no::text = $3::text)`,
+        [showId, rawSeat, String(seatNumeric)]
+      );
+      console.log(`[Concurrency] Cleared ${existingTickets.length} pre-existing ticket(s) for Seat ${rawSeat}, Show ${showId}`);
+    }
+  } catch (cleanupErr) {
+    console.warn(`[Concurrency] Cleanup warning (non-fatal): ${cleanupErr.message}`);
+  }
+
   // Create an array of simultaneous booking attempts
   for (let i = 1; i <= requestCount; i++) {
     requests.push(attemptBookingTransaction(i, showId, rawSeat, seatNumeric, customerId));
